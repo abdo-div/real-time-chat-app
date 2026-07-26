@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import AppError from "./utils/AppError.js";
-import globalErrorHandler from "./controllers/errorController.js";
+import globalErrorHandler from "./controllers/errorControllers.js";
 
 // Re-create __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -27,7 +27,7 @@ app.get("/health", (req, res) => {
 });
 
 // Unhandled Route Handler (404)
-app.all("*", (req, res, next) => {
+app.use((req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });
 

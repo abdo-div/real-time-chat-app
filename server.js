@@ -1,17 +1,17 @@
 import http from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
+dotenv.config();
 import app from "./app.js";
 import connectDB from "./config/db.js";
 
+dotenv.config({ path: "./config.env" });
 // Handle Uncaught Exceptions (e.g. undefined variable references)
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
   console.error(err.name, err.message);
   process.exit(1);
 });
-
-dotenv.config();
 
 // Connect Database
 connectDB();
