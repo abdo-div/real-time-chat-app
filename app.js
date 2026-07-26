@@ -5,7 +5,9 @@ import cors from "cors";
 import AppError from "./utils/AppError.js";
 import globalErrorHandler from "./controllers/errorControllers.js";
 import cookieParser from "cookie-parser";
-import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import roomRoutes from "./routes/roomRoutes.js";
+import messageRoutes from "./routes/messageRoutes.js";
 // Re-create __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,8 +29,10 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "success", message: "Server is healthy!" });
 });
 
-// Mount API Routes
-app.use("/api/v1/auth", authRoutes);
+// 2. MOUNT REST API ROUTES
+app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/rooms", roomRoutes);
+app.use("/api/v1/messages", messageRoutes);
 
 // Unhandled Route Handler (404)
 app.use((req, res, next) => {

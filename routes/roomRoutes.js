@@ -1,43 +1,28 @@
 import express from "express";
-import { protect, restrictTo } from "../controllers/authController.js";
+import { protect } from "../controllers/authController.js";
 import * as roomController from "../controllers/roomController.js";
+import messageRoutes from "./messageRoutes.js";
 
 const router = express.Router();
 
-// ------------------------------------------------------------------
-// PROTECTED ROUTES (Requires Valid JWT)
-// All room operations require the user to be authenticated
-// ------------------------------------------------------------------
+// Protect ALL room and member operations
 router.use(protect);
 
-/**
- * @route   GET  /api/v1/rooms
- * @desc    Get all accessible rooms for the user (public channels + joined private/DM rooms)
- *
- * @route   POST /api/v1/rooms
- * @desc    Create a new room (channel or direct message)
- */
+// ------------------------------------------------------------------
+// NESTED ROUTE FOR MESSAGES
+// ------------------------------------------------------------------
+router.use("/:roomId/messages", messageRoutes);
+
+// ------------------------------------------------------------------
+// ROOM CORE ENDPOINTS
+// ------------------------------------------------------------------
 router
   .route("/")
   .get(roomController.getAllRooms)
   .post(roomController.createRoom);
 
-/**
- * @route   POST /api/v1/rooms/dm
- * @desc    Find or create a 1-on-1 Direct Message channel with another user
- */
 router.post("/dm", roomController.getOrCreateDM);
 
-/**
- * @route   GET    /api/v1/rooms/:slug
- * @desc    Get details for a specific room by its URL slug (e.g. "general")
- *
- * @route   PATCH  /api/v1/rooms/:slug
- * @desc    Update room details (topic, description, name) - Requires room admin/moderator
- *
- * @route   DELETE /api/v1/rooms/:slug
- * @desc    Delete or archive a room - Requires room admin
- */
 router
   .route("/:slug")
   .get(roomController.getRoomBySlug)
@@ -45,31 +30,22 @@ router
   .delete(roomController.deleteRoom);
 
 // ------------------------------------------------------------------
-// ROOM MEMBERSHIP MANAGEMENT
+// ROOM MEMBER MANAGEMENT (Operations on the RoomMember collection)
 // ------------------------------------------------------------------
 
-/**
- * @route   POST   /api/v1/rooms/:roomId/join
- * @desc    Join a public room
- */
+// Join & Leave current user actions
 router.post("/:roomId/join", roomController.joinRoom);
-
-/**
- * @route   DELETE /api/v1/rooms/:roomId/leave
- * @desc    Leave a room
- */
 router.delete("/:roomId/leave", roomController.leaveRoom);
 
-/**
- * @route   GET    /api/v1/rooms/:roomId/members
- * @desc    Get list of members in a specific room with their roles
- */
-router.get("/:roomId/members", roomController.getRoomMembers);
+// Member CRUD inside a room
+router
+  .route("/:roomId/members")
+  .get(roomController.getRoomMembers) // List members with roles
+  .post(roomController.addRoomMember); // Invite / Add user
 
-/**
- * @route   POST   /api/v1/rooms/:roomId/invite
- * @desc    Invite/Add a user to a private or public room
- */
-router.post("/:roomId/invite", roomController.inviteMember);
+router
+  .route("/:roomId/members/:userId")
+  .patch(roomController.updateMemberRole) // Promote/demote (admin, moderator, member)
+  .delete(roomController.removeRoomMember); // Kick member from room
 
 export default router;
