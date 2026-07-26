@@ -19,6 +19,7 @@
     "express": "^5.2.1",
     "mongoose": "^9.8.0",
     "pug": "^3.0.4",
+    "slugify": "^1.6.9",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
