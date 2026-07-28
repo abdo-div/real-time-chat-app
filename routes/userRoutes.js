@@ -21,9 +21,14 @@ router.patch("/resetPassword/:token", authController.resetPassword);
 router.use(authController.protect);
 
 // Current User Operations
-router.get("/me", authController.getMe);
+router.get("/me", userController.getMe, userController.getUser);
 router.patch("/updateMyPassword", authController.updatePassword);
-router.patch("/updateMe", userController.updateMe); // Profile updates (avatar, bio, username)
+router.patch(
+  "/updateMe",
+  userController.uploadUserPhoto,
+  userController.resizeUserPhoto,
+  userController.updateMe,
+); // Profile updates (avatar, bio, username)
 router.patch("/status", authController.updateStatus); // Real-time status (online, away, offline)
 router.delete("/deleteMe", userController.deleteMe);
 
