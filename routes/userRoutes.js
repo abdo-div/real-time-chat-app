@@ -5,39 +5,32 @@ import * as userController from "../controllers/userController.js";
 const router = express.Router();
 
 // ------------------------------------------------------------------
-// 1. PUBLIC AUTH ROUTES
+// PUBLIC AUTH ROUTES
 // ------------------------------------------------------------------
 router.post("/signup", authController.signup);
 router.post("/login", authController.login);
-router.get("/logout", authController.logout);
-
-// Password Management
-router.post("/forgotPassword", authController.forgotPassword);
-router.patch("/resetPassword/:token", authController.resetPassword);
+router.post("/logout", authController.logout);
 
 // ------------------------------------------------------------------
-// 2. PROTECTED USER ROUTES (Requires Valid JWT)
+// PROTECTED USER ROUTES (Requires JWT)
 // ------------------------------------------------------------------
 router.use(authController.protect);
 
-// Current User Operations
 router.get("/me", userController.getMe, userController.getUser);
-router.patch("/updateMyPassword", authController.updatePassword);
 router.patch(
   "/updateMe",
   userController.uploadUserPhoto,
   userController.resizeUserPhoto,
   userController.updateMe,
-); // Profile updates (avatar, bio, username)
-router.patch("/status", authController.updateStatus); // Real-time status (online, away, offline)
+);
+router.patch("/updateStatus", userController.updateStatus);
 router.delete("/deleteMe", userController.deleteMe);
 
-// User Discovery (Essential for search & DM starting)
-router.get("/", userController.getAllUsers); // Search/list workspace users
+router.get("/", userController.getAllUsers);
 router.get("/:id", userController.getUser);
 
 // ------------------------------------------------------------------
-// 3. ADMIN-ONLY ROUTES
+// RESTRICTED ADMIN-ONLY ROUTES
 // ------------------------------------------------------------------
 router.use(authController.restrictTo("admin"));
 
