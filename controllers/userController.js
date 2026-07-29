@@ -94,18 +94,6 @@ export const getAllUsers = catchAsync(async (req, res, next) => {
   });
 });
 
-export const getUser = catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.params.id);
-
-  if (!user) {
-    return next(new AppError("no user foung with that id", 404));
-  }
-  res.status(200).json({
-    status: "success",
-    data: { user },
-  });
-});
-
 // ADMIN-ONLY CRUD CONTROLLERS
 
 export const createUser = catchAsync(async (req, res, next) => {
