@@ -126,8 +126,13 @@ export const updateMessage = catchAsync(async (req, res, next) => {
     return next(new AppError("Message not found or has been deleted", 404));
   }
 
-  // Only the original sender can edit content
-  if (message.sender.toString() !== req.user.id.toString()) {
+  // 1. Safely retrieve the sender ID whether 'sender' is populated or an ObjectId
+  const senderId = message.sender._id
+    ? message.sender._id.toString()
+    : message.sender.toString();
+
+  // 2. Compare string to string
+  if (senderId !== req.user.id.toString()) {
     return next(new AppError("You can only edit your own messages", 403));
   }
 
@@ -135,7 +140,10 @@ export const updateMessage = catchAsync(async (req, res, next) => {
   message.isEdited = true;
   await message.save();
 
-  await message.populate("sender", "username avatar status");
+  // 3. Ensure sender details are populated for the response
+  if (!message.sender.username) {
+    await message.populate("sender", "username avatar status");
+  }
 
   res.status(200).json({
     status: "success",
@@ -156,8 +164,13 @@ export const deleteMessage = catchAsync(async (req, res, next) => {
     return next(new AppError("Message not found", 404));
   }
 
-  // Check if caller is sender OR room admin/moderator
-  const isSender = message.sender.toString() === req.user.id.toString();
+  // 1. Safely extract sender ID string whether populated or not
+  const senderId = message.sender._id
+    ? message.sender._id.toString()
+    : message.sender.toString();
+
+  // 2. Use senderId here instead of message.sender.toString()
+  const isSender = senderId === req.user.id.toString();
 
   let isRoomAdminOrMod = false;
   if (!isSender) {
@@ -187,7 +200,6 @@ export const deleteMessage = catchAsync(async (req, res, next) => {
     message: "Message deleted successfully",
   });
 });
-
 /**
  * @desc    Add or toggle an emoji reaction on a message
  * @route   POST /api/v1/messages/:id/react
@@ -217,27 +229,40 @@ export const toggleReaction = catchAsync(async (req, res, next) => {
     );
   }
 
-  // Find index of emoji entry in reactions schema
+  // 1. Guard against undefined reactions on legacy documents
+  if (!message.reactions) {
+    message.reactions = [];
+  }
+
+  const userIdStr = req.user.id.toString();
+
+  // 2. Find index of emoji entry
   const existingReactionIndex = message.reactions.findIndex(
     (r) => r.emoji === emoji,
   );
 
   if (existingReactionIndex > -1) {
-    const userIndex = message.reactions[existingReactionIndex].users.indexOf(
-      req.user.id,
+    const reactionGroup = message.reactions[existingReactionIndex];
+
+    // Ensure nested users array exists
+    if (!reactionGroup.users) reactionGroup.users = [];
+
+    // Use .findIndex + .toString() to reliably compare ObjectIds
+    const userIndex = reactionGroup.users.findIndex(
+      (uId) => uId.toString() === userIdStr,
     );
 
     if (userIndex > -1) {
-      // User already reacted with this emoji -> Remove user
-      message.reactions[existingReactionIndex].users.splice(userIndex, 1);
+      // User already reacted -> Remove user
+      reactionGroup.users.splice(userIndex, 1);
 
-      // If no users left for this emoji, remove the emoji entry entirely
-      if (message.reactions[existingReactionIndex].users.length === 0) {
+      // Remove emoji group if empty
+      if (reactionGroup.users.length === 0) {
         message.reactions.splice(existingReactionIndex, 1);
       }
     } else {
       // Add user to existing emoji list
-      message.reactions[existingReactionIndex].users.push(req.user.id);
+      reactionGroup.users.push(req.user.id);
     }
   } else {
     // First user to react with this emoji
@@ -246,6 +271,9 @@ export const toggleReaction = catchAsync(async (req, res, next) => {
       users: [req.user.id],
     });
   }
+
+  // Tell Mongoose that the reactions array was mutated
+  message.markModified("reactions");
 
   await message.save();
 

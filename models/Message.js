@@ -65,6 +65,11 @@ const messageSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
     },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
   },
   {
     timestamps: true,

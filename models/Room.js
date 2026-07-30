@@ -8,7 +8,7 @@ const roomSchema = new mongoose.Schema(
       required: [true, "room name is required"],
       trim: true,
       minlength: [2, "room name must be at least 2 characters"],
-      maxlength: [50, "room name cannot exceed 50 characters"],
+      maxlength: [100, "room name cannot exceed 50 characters"],
     },
     slug: {
       type: String,
@@ -25,7 +25,7 @@ const roomSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: {
-        values: ["public", "private", "direct"],
+        values: ["public", "private", "direct", "dm"],
         message: "room type must be either public, private, or direct",
       },
       default: "public",

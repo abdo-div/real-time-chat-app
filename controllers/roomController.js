@@ -179,7 +179,7 @@ export const updateRoom = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
-    data: { room: updateRoom },
+    data: { room: updatedRoom },
   });
 });
 
@@ -241,7 +241,7 @@ export const joinRoom = catchAsync(async (req, res, next) => {
 });
 
 export const leaveRoom = catchAsync(async (req, res, next) => {
-  const membership = await RoomMember.findByIdAndDelete({
+  const membership = await RoomMember.findOneAndDelete({
     room: req.params.roomId,
     user: req.user.id,
   });
