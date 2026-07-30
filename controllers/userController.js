@@ -1,3 +1,4 @@
+import fs from "fs";
 import multer from "multer";
 import sharp from "sharp";
 import User from "../models/User.js";
@@ -41,6 +42,10 @@ export const resizeUserPhoto = catchAsync(async (req, res, next) => {
 
   // Create unique filename: user-userId-timestamp.jpeg
   req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
+
+  if (!fs.existsSync("public/img/users")) {
+    fs.mkdirSync("public/img/users", { recursive: true });
+  }
 
   await sharp(req.file.buffer)
     .resize(500, 500)

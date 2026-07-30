@@ -5,7 +5,8 @@ import { htmlToText } from "html-to-text";
 export default class Email {
   constructor(user, url) {
     this.to = user.email;
-    this.firstName = user.name.split(" ")[0]; // Grabs just "John" from "John Doe"
+    const nameStr = user.username || user.name || "User";
+    this.firstName = nameStr.split(" ")[0]; // Grabs first name or username
     this.url = url;
     this.from = `NexRide Support <${process.env.EMAIL_FROM || "support@nexride.com"}>`;
   }

@@ -75,12 +75,11 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ room: 1, createdAt: -1 });
 
-messageSchema.pre(/^find/, function (next) {
+messageSchema.pre(/^find/, function () {
   this.populate({
     path: "sender",
     select: "username avatar role status",
   });
-  next();
 });
 
 messageSchema.methods.softDelete = async function () {

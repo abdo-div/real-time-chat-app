@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 const userSchema = mongoose.Schema(
   {
@@ -44,6 +45,9 @@ const userSchema = mongoose.Schema(
         message: "passwords do not match!",
       },
     },
+    passwordChangedAt: Date,
+    passwordResetToken: String,
+    passwordResetExpires: Date,
     avatar: {
       type: String,
       default: "default-avatar.png",
@@ -65,6 +69,11 @@ const userSchema = mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    active: {
+      type: Boolean,
+      default: true,
+      select: false,
+    },
     isAccountActive: {
       type: Boolean,
       default: true,
@@ -81,33 +90,35 @@ const userSchema = mongoose.Schema(
 // ------------------------------------------------------------------
 // MONGOOSE INDEXES
 // ------------------------------------------------------------------
-// Compound index for high-performance status and active filtering
 
 userSchema.index({ status: 1, lastActiveAt: -1 });
 
 // ------------------------------------------------------------------
 // PRE-SAVE MIDDLEWARE HOOKS
 // ------------------------------------------------------------------
-// Hash password automatically before saving if modified
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
 
   this.password = await bcrypt.hash(this.password, 12);
+  this.passwordConfirm = undefined;
 });
 
-userSchema.pre("save", function (next) {
+userSchema.pre("save", function () {
   if (this.isModified("status")) {
     this.lastActiveAt = Date.now();
   }
-  next();
 });
-/**
- * Compares candidate password with hashed password in database
- * @param {string} candidatePassword - Plain text password input
- * @param {string} userPassword - Hashed password from DB
- * @returns {Promise<boolean>} True if matching
- */
+
+userSchema.pre("save", function () {
+  if (!this.isModified("password") || this.isNew) return;
+
+  this.passwordChangedAt = Date.now() - 1000;
+});
+
+// ------------------------------------------------------------------
+// INSTANCE METHODS & STATICS
+// ------------------------------------------------------------------
 
 userSchema.methods.correctPassword = async function (
   candidatePassword,
@@ -116,8 +127,32 @@ userSchema.methods.correctPassword = async function (
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
+userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
+  if (this.passwordChangedAt) {
+    const changedTimestamp = parseInt(
+      this.passwordChangedAt.getTime() / 1000,
+      10,
+    );
+    return JWTTimestamp < changedTimestamp;
+  }
+  return false;
+};
+
+userSchema.methods.createPasswordResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  this.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
+};
+
 userSchema.statics.findActiveUsers = function () {
-  return this.find({ isAccountActive: true, status: "online" }).select(
+  return this.find({ active: { $ne: false }, status: "online" }).select(
     "-password",
   );
 };
@@ -127,6 +162,9 @@ userSchema.set("toJSON", {
     delete ret.password;
     delete ret.__v;
     delete ret.isAccountActive;
+    delete ret.active;
+    delete ret.passwordResetToken;
+    delete ret.passwordResetExpires;
     return ret;
   },
 });

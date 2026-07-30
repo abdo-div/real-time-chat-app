@@ -5,10 +5,10 @@ const roomSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      requierd: [true, "room name is required"],
+      required: [true, "room name is required"],
       trim: true,
       minlength: [2, "room name must be at least 2 characters"],
-      maxlength: [50, "room name cannot exced 50 characters"],
+      maxlength: [50, "room name cannot exceed 50 characters"],
     },
     slug: {
       type: String,
@@ -19,7 +19,7 @@ const roomSchema = new mongoose.Schema(
     topic: {
       type: String,
       trim: true,
-      maxlength: [150, "topic description cannot exced 150 characters"],
+      maxlength: [150, "topic description cannot exceed 150 characters"],
       default: "",
     },
     type: {
@@ -64,15 +64,13 @@ roomSchema.virtual("memberCount").get(function () {
   return this.members ? this.members.length : 0;
 });
 
-roomSchema.pre("save", function (next) {
-  if (!this.isModified("name")) return next();
+roomSchema.pre("save", function () {
+  if (!this.isModified("name")) return;
   this.slug = slugify(this.name, { lower: true, strict: true });
-  next();
 });
 
-roomSchema.pre(/^find/, function (next) {
+roomSchema.pre(/^find/, function () {
   this.find({ isArchived: { $ne: true } });
-  next();
 });
 
 const Room = mongoose.model("Room", roomSchema);

@@ -3,7 +3,7 @@ import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import User from "./../models/User.js"; // Note: Capitalized User model path
 import catchAsync from "../utils/catchAsync.js";
-import AppError from "../utils/appError.js";
+import AppError from "../utils/AppError.js";
 import Email from "./../utils/email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -280,17 +280,30 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
   const resetToken = user.createPasswordResetToken();
   await user.save({ validateBeforeSave: false });
 
+  const resetURL = `${req.protocol}://${req.get(
+    "host",
+  )}/api/v1/users/resetPassword/${resetToken}`;
+
   try {
-    const resetURL = `${req.protocol}://${req.get(
-      "host",
-    )}/api/v1/users/resetPassword/${resetToken}`;
     await new Email(user, resetURL).sendPasswordReset();
 
     res.status(200).json({
       status: "success",
-      message: "Token sent to email",
+      message: "Token sent to email!",
+      resetToken,
     });
   } catch (err) {
+    console.error("Email send error:", err.message);
+
+    if (process.env.NODE_ENV === "development") {
+      return res.status(200).json({
+        status: "success",
+        message: "Email sending failed or unconfigured in dev mode, but resetToken is returned for Postman testing.",
+        resetToken,
+        resetURL,
+      });
+    }
+
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     await user.save({ validateBeforeSave: false });
