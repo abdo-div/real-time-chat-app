@@ -2,7 +2,6 @@ import Message from "../models/Message.js";
 import RoomMember from "../models/RoomMember.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/appError.js";
-
 // Helper function to check if user is a member of the target room
 const checkRoomAccess = async (roomId, userId) => {
   const membership = await RoomMember.findOne({ room: roomId, user: userId });
@@ -70,41 +69,30 @@ export const getRoomMessages = catchAsync(async (req, res, next) => {
  * @route   POST /api/v1/rooms/:roomId/messages
  */
 export const createMessage = catchAsync(async (req, res, next) => {
+  const { content } = req.body;
   const { roomId } = req.params;
-  const { content, attachments, replyTo } = req.body;
 
-  // 1. Verify caller membership
-  const membership = await checkRoomAccess(roomId, req.user.id);
-  if (!membership) {
-    return next(
-      new AppError("You must be a room member to send messages", 403),
-    );
+  if (!content || !content.trim()) {
+    return next(new AppError("Message content cannot be empty", 400));
   }
 
-  if (!content && (!attachments || attachments.length === 0)) {
-    return next(
-      new AppError("Message must contain text content or an attachment", 400),
-    );
-  }
-
-  // 2. Create message
-  let message = await Message.create({
+  const newMessage = await Message.create({
+    content,
     room: roomId,
     sender: req.user.id,
-    content,
-    attachments: attachments || [],
-    replyTo: replyTo || null,
   });
 
-  // Populate sender info for front-end rendering
-  message = await message.populate("sender", "username avatar status");
-  if (message.replyTo) {
-    message = await message.populate("replyTo", "content sender");
+  await newMessage.populate("sender", "username avatar status");
+
+  // 📡 REAL-TIME BROADCAST: Emit to all sockets connected to this roomId
+  const io = req.app.get("io");
+  if (io) {
+    io.to(roomId).emit("new_message", newMessage);
   }
 
   res.status(201).json({
     status: "success",
-    data: { message },
+    data: { message: newMessage },
   });
 });
 
@@ -126,12 +114,10 @@ export const updateMessage = catchAsync(async (req, res, next) => {
     return next(new AppError("Message not found or has been deleted", 404));
   }
 
-  // 1. Safely retrieve the sender ID whether 'sender' is populated or an ObjectId
   const senderId = message.sender._id
     ? message.sender._id.toString()
     : message.sender.toString();
 
-  // 2. Compare string to string
   if (senderId !== req.user.id.toString()) {
     return next(new AppError("You can only edit your own messages", 403));
   }
@@ -140,9 +126,14 @@ export const updateMessage = catchAsync(async (req, res, next) => {
   message.isEdited = true;
   await message.save();
 
-  // 3. Ensure sender details are populated for the response
   if (!message.sender.username) {
     await message.populate("sender", "username avatar status");
+  }
+
+  // 📡 REAL-TIME BROADCAST: Emit updated message
+  const io = req.app.get("io");
+  if (io) {
+    io.to(message.room.toString()).emit("message_updated", message);
   }
 
   res.status(200).json({
@@ -164,12 +155,10 @@ export const deleteMessage = catchAsync(async (req, res, next) => {
     return next(new AppError("Message not found", 404));
   }
 
-  // 1. Safely extract sender ID string whether populated or not
   const senderId = message.sender._id
     ? message.sender._id.toString()
     : message.sender.toString();
 
-  // 2. Use senderId here instead of message.sender.toString()
   const isSender = senderId === req.user.id.toString();
 
   let isRoomAdminOrMod = false;
@@ -189,11 +178,19 @@ export const deleteMessage = catchAsync(async (req, res, next) => {
     );
   }
 
-  // Perform soft delete
   message.isDeleted = true;
   message.content = "This message was deleted";
   message.attachments = [];
   await message.save();
+
+  // 📡 REAL-TIME BROADCAST: Notify room members of deletion
+  const io = req.app.get("io");
+  if (io) {
+    io.to(message.room.toString()).emit("message_deleted", {
+      messageId: message._id,
+      roomId: message.room,
+    });
+  }
 
   res.status(200).json({
     status: "success",
@@ -276,7 +273,13 @@ export const toggleReaction = catchAsync(async (req, res, next) => {
   message.markModified("reactions");
 
   await message.save();
-
+  const io = req.app.get("io");
+  if (io) {
+    io.to(message.room.toString()).emit("reaction_updated", {
+      messageId: message._id,
+      reactions: message.reactions,
+    });
+  }
   res.status(200).json({
     status: "success",
     data: {

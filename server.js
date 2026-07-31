@@ -1,11 +1,11 @@
 import http from "http";
-import { Server } from "socket.io";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ path: "./config.env" });
+
 import app from "./app.js";
 import connectDB from "./config/db.js";
+import { initSocket } from "./utils/socketHandler.js";
 
-dotenv.config({ path: "./config.env" });
 // Handle Uncaught Exceptions (e.g. undefined variable references)
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
@@ -16,28 +16,17 @@ process.on("uncaughtException", (err) => {
 // Connect Database
 connectDB();
 
-// Create HTTP Server & Attach Socket.io
+// Create HTTP server wrapping Express app
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
 
-// Socket.io Listener
-io.on("connection", (socket) => {
-  console.log(`⚡ Client Connected: ${socket.id}`);
-
-  socket.on("disconnect", () => {
-    console.log(`❌ Client Disconnected: ${socket.id}`);
-  });
-});
+// Initialize Socket.IO and export io instance if needed
+export const io = initSocket(server);
+app.set("io", io);
 
 const PORT = process.env.PORT || 5000;
 const serverListener = server.listen(PORT, () => {
   console.log(
-    `🚀 App running in ${process.env.NODE_ENV || "development"} mode on http://localhost:${PORT}`,
+    `🚀 App running in ${process.env.NODE_ENV || "development"} mode on http://localhost:${PORT}`
   );
 });
 
