@@ -1,7 +1,7 @@
 import express from "express";
 import { protect } from "../controllers/authController.js";
 import * as messageController from "../controllers/messageController.js";
-
+import { uploadMessageAttachments } from "../middleware/attachmentUpload.js";
 // mergeParams: true enables access to params from parent router (e.g. /api/v1/rooms/:roomId/messages)
 const router = express.Router({ mergeParams: true });
 
@@ -20,7 +20,7 @@ router.use(protect);
 router
   .route("/")
   .get(messageController.getRoomMessages)
-  .post(messageController.createMessage);
+  .post(uploadMessageAttachments, messageController.createMessage);
 
 /**
  * @route   PATCH  /api/v1/messages/:id

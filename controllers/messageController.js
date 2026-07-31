@@ -72,24 +72,64 @@ export const createMessage = catchAsync(async (req, res, next) => {
   const { content } = req.body;
   const { roomId } = req.params;
 
-  if (!content || !content.trim()) {
-    return next(new AppError("Message content cannot be empty", 400));
+  //1. process uploaded files if any exists
+
+  let attachments = [];
+  if (req.files && req.files.length > 0) {
+    attachments = req.files.map((file) => {
+      let category = "other";
+
+      if (file.mimetype.startsWith("image/")) {
+        category = "image";
+      } else if (file.mimetype.startsWith("audio/")) {
+        category = "audio";
+      } else if (file.mimetype.startsWith("video/")) {
+        category = "video";
+      } else if (
+        file.mimetype === "application/pdf" ||
+        file.mimetype.includes("word") ||
+        file.mimetype.includes("document") ||
+        file.mimetype.includes("text")
+      ) {
+        category = "document"; // PDF counts as a document!
+      }
+
+      return {
+        url: `/img/attachments/${file.filename}`,
+        fileName: file.originalname,
+        fileType: category, // Matches Mongoose enum: image | document | audio | video | other
+        fileSize: file.size,
+      };
+    });
   }
 
+  //2.validate: must have either text content or at least 1 file attachment
+  const hasContent = content && content.trim().length > 0;
+  const hasAttachments = attachments.length > 0;
+
+  if (!hasContent && !hasAttachments) {
+    return next(
+      new AppError(
+        "message must contain text content or at least file attachment",
+        400,
+      ),
+    );
+  }
+
+  //3. save messages with attachment array to mongodb
   const newMessage = await Message.create({
-    content,
+    content: hasContent ? content.trim() : "",
     room: roomId,
     sender: req.user.id,
+    attachments,
   });
-
+  // populate sender details for http response and websocket broadcast
   await newMessage.populate("sender", "username avatar status");
-
-  // 📡 REAL-TIME BROADCAST: Emit to all sockets connected to this roomId
+  // real time broadcast emit to all sockets connected to this roomId
   const io = req.app.get("io");
   if (io) {
     io.to(roomId).emit("new_message", newMessage);
   }
-
   res.status(201).json({
     status: "success",
     data: { message: newMessage },
