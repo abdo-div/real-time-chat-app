@@ -327,3 +327,60 @@ export const toggleReaction = catchAsync(async (req, res, next) => {
     },
   });
 });
+
+//1. mark all messages in a room as read for the current user
+
+export const markMessagesAsRead = catchAsync(async (req, res) => {
+  const { roomId } = req.params;
+  const userId = req.user._id;
+
+  // Find messages in this room NOT sent by current user and NOT already read by current user
+  const updateMessages = await Message.updateMany(
+    {
+      room: roomId,
+      sender: { $ne: userId },
+      "readBy.user": { $ne: userId },
+    },
+    {
+      $addToSet: {
+        readBy: {
+          user: userId,
+          readAt: new Date(),
+        },
+      },
+    },
+  );
+
+  res.status(200).json({
+    status: "success",
+    message: "message marked as read",
+    modifiedCount: updateMessages.modifiedCount,
+  });
+});
+
+// 2. Get unread message counts grouped by room for the logged-in user
+
+export const getUnreadCounts = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  const usreadCounts = await Message.aggregate([
+    {
+      $match: {
+        sender: { $ne: userId },
+        "readBy.user": { $ne: userId },
+      },
+    },
+    {
+      $group: {
+        _id: "$room",
+        unreadCounts: { $sum: 1 },
+      },
+    },
+  ]);
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      unreadCounts,
+    },
+  });
+});

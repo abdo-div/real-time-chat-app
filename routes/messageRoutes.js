@@ -10,6 +10,11 @@ const router = express.Router({ mergeParams: true });
 // ------------------------------------------------------------------
 router.use(protect);
 
+// Route to get unread counts for all rooms
+router.get("/unread-counts", messageController.getUnreadCounts);
+
+// Route to mark all messages in a specific room as read
+router.patch("/read/:roomId", messageController.markMessagesAsRead);
 /**
  * @route   GET  /api/v1/rooms/:roomId/messages
  * @desc    Get paginated message history for a specific room (supports ?page=1&limit=50)

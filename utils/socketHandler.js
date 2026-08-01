@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Message from "../models/Message.js";
 
 export const initSocket = (server) => {
   const io = new Server(server, {
@@ -92,6 +93,42 @@ export const initSocket = (server) => {
         userId: socket.user.id,
         roomId,
       });
+    });
+
+    // 👁️ REAL-TIME READ RECEIPT EVENT
+    // 👁️ REAL-TIME READ RECEIPT EVENT
+    socket.on("mark_read", async (data) => {
+      try {
+        // Handle both raw string "roomId" AND object { roomId } formats
+        const roomId = typeof data === "string" ? data : data?.roomId;
+
+        if (!roomId) return;
+
+        const userId = socket.user._id;
+
+        // Mark unread messages in DB
+        await Message.updateMany(
+          {
+            room: roomId,
+            sender: { $ne: userId },
+            "readBy.user": { $ne: userId },
+          },
+          {
+            $addToSet: {
+              readBy: { user: userId, readAt: new Date() },
+            },
+          },
+        );
+
+        // Broadcast to other room members
+        socket.to(roomId).emit("messages_read", {
+          roomId,
+          readBy: userId,
+          readAt: new Date(),
+        });
+      } catch (err) {
+        console.error("Error in mark_read socket event:", err);
+      }
     });
 
     socket.on("disconnect", async () => {

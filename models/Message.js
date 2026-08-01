@@ -49,6 +49,18 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    readBy: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        readAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     editHistory: [
       {
         content: String,
@@ -78,7 +90,7 @@ const messageSchema = new mongoose.Schema(
   },
 );
 
-messageSchema.index({ room: 1, createdAt: -1 });
+messageSchema.index({ room: 1, createdAt: -1, "readBy.user": 1 });
 
 messageSchema.pre(/^find/, function () {
   this.populate({
