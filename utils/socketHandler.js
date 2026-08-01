@@ -131,6 +131,95 @@ export const initSocket = (server) => {
       }
     });
 
+    // Inside socketHandler.js / initSocket:
+    socket.on("toggle_reaction", async (data) => {
+      try {
+        const { messageId, emoji } = data || {};
+        const userId = socket.user._id;
+
+        if (!messageId || !emoji) return;
+
+        const message = await Message.findById(messageId);
+        if (!message || message.isDeleted) return;
+
+        // Guard for legacy documents
+        if (!message.reactions) message.reactions = [];
+
+        const userIdStr = userId.toString();
+        const existingReactionIndex = message.reactions.findIndex(
+          (r) => r.emoji === emoji,
+        );
+
+        if (existingReactionIndex > -1) {
+          const reactionGroup = message.reactions[existingReactionIndex];
+          if (!reactionGroup.users) reactionGroup.users = [];
+
+          const userIndex = reactionGroup.users.findIndex(
+            (uId) => uId.toString() === userIdStr,
+          );
+
+          if (userIndex > -1) {
+            // User already reacted -> Remove user
+            reactionGroup.users.splice(userIndex, 1);
+            // Remove emoji group if empty
+            if (reactionGroup.users.length === 0) {
+              message.reactions.splice(existingReactionIndex, 1);
+            }
+          } else {
+            // Add user to existing emoji list
+            reactionGroup.users.push(userId);
+          }
+        } else {
+          // First user to react with this emoji
+          message.reactions.push({
+            emoji,
+            users: [userId],
+          });
+        }
+
+        message.markModified("reactions");
+        await message.save();
+
+        // Broadcast to room
+        io.to(message.room.toString()).emit("reaction_updated", {
+          messageId: message._id,
+          reactions: message.reactions,
+        });
+      } catch (err) {
+        console.error("Error in toggle_reaction socket listener:", err);
+      }
+    });
+
+    socket.on("send_message", async (data) => {
+      try {
+        const { room, content, replyTo } = data || {};
+        const userId = socket.user._id;
+
+        if (!room || !content) return;
+
+        let newMessage = await Message.create({
+          sender: userId,
+          room,
+          content,
+          replyTo: replyTo || null,
+        });
+
+        newMessage = await newMessage.populate([
+          { path: "sender", select: "username avatar" },
+          {
+            path: "replyTo",
+            select: "content sender createdAt",
+            populate: { path: "sender", select: "username" },
+          },
+        ]);
+
+        // Broadcast to everyone in the room
+        io.to(room).emit("new_message", newMessage);
+      } catch (err) {
+        console.error("Error in send_message socket event:", err);
+      }
+    });
+
     socket.on("disconnect", async () => {
       console.log(`❌ User disconnected: ${socket.user.username}`);
       // 🔴 PRESENCE: Update status in DB to offline & broadcast event

@@ -69,11 +69,10 @@ export const getRoomMessages = catchAsync(async (req, res, next) => {
  * @route   POST /api/v1/rooms/:roomId/messages
  */
 export const createMessage = catchAsync(async (req, res, next) => {
-  const { content } = req.body;
+  const { content, replyTo } = req.body;
   const { roomId } = req.params;
 
-  //1. process uploaded files if any exists
-
+  // 1. Process uploaded files if any exist
   let attachments = [];
   if (req.files && req.files.length > 0) {
     attachments = req.files.map((file) => {
@@ -91,19 +90,19 @@ export const createMessage = catchAsync(async (req, res, next) => {
         file.mimetype.includes("document") ||
         file.mimetype.includes("text")
       ) {
-        category = "document"; // PDF counts as a document!
+        category = "document";
       }
 
       return {
         url: `/img/attachments/${file.filename}`,
         fileName: file.originalname,
-        fileType: category, // Matches Mongoose enum: image | document | audio | video | other
+        fileType: category,
         fileSize: file.size,
       };
     });
   }
 
-  //2.validate: must have either text content or at least 1 file attachment
+  // 2. Validate: must have either text content or at least 1 file attachment
   const hasContent = content && content.trim().length > 0;
   const hasAttachments = attachments.length > 0;
 
@@ -116,26 +115,36 @@ export const createMessage = catchAsync(async (req, res, next) => {
     );
   }
 
-  //3. save messages with attachment array to mongodb
+  // 3. Save message with attachments and optional replyTo
   const newMessage = await Message.create({
     content: hasContent ? content.trim() : "",
     room: roomId,
     sender: req.user.id,
     attachments,
+    replyTo: replyTo || null,
   });
-  // populate sender details for http response and websocket broadcast
-  await newMessage.populate("sender", "username avatar status");
-  // real time broadcast emit to all sockets connected to this roomId
+
+  // 4. Populate sender details AND replyTo details for HTTP & WebSocket
+  await newMessage.populate([
+    { path: "sender", select: "username avatar status" },
+    {
+      path: "replyTo",
+      select: "content sender createdAt",
+      populate: { path: "sender", select: "username avatar" },
+    },
+  ]);
+
+  // 5. Real-time broadcast to all sockets connected to this roomId
   const io = req.app.get("io");
   if (io) {
     io.to(roomId).emit("new_message", newMessage);
   }
+
   res.status(201).json({
     status: "success",
     data: { message: newMessage },
   });
 });
-
 /**
  * @desc    Edit a previously sent message
  * @route   PATCH /api/v1/messages/:id
