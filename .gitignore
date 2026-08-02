@@ -1,8 +1,13 @@
-# Node dependencies
+# Dependencies
 node_modules/
 
 # Environment Variables & Secrets
+config.env
 .env
+
+# Uploaded Files & Attachments
+public/img/attachments/*
+!public/img/attachments/.gitkeep
 
 # Server & Application Logs
 *.log
