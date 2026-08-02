@@ -2,45 +2,54 @@ extends _base
 
 block content
   main.flex-1.flex.flex-col.bg-main-bg.relative.min-w-0
-    header.h-\[49px\].border-b.border-border-subtle.flex.items-center.justify-between.px-section-padding.shrink-0.bg-main-bg\/80.backdrop-blur-md
+    header.h-12.border-b.border-border-subtle.flex.items-center.justify-between.px-section-padding.shrink-0.bg-main-bg
       .flex.items-center.gap-2
-        span.material-symbols-outlined.text-primary.text-\[28px\] forum
-        h1.text-headline-md.font-headline-md.text-text-primary Welcome to SlackFlow Workspace
+        span.material-symbols-outlined.text-primary.text-4xl forum
+        h1.text-lg.font-bold.text-white Welcome to SlackFlow Workspace
 
     .flex-1.overflow-y-auto.p-8
       .max-w-4xl.mx-auto.space-y-8
-        .bg-surface-container.p-6.rounded-xl.border.border-border-subtle
-          h2.text-headline-md.font-bold.text-white.mb-2 Hello, #{user ? user.username : 'Guest'}!
-          p.text-body-md.text-on-surface-variant Select a channel from the left sidebar or start a direct message to begin chatting in real-time.
 
-        .grid.grid-cols-1.md_grid-cols-2.gap-6
+        .bg-surface-container.p-6.rounded-xl.border.border-border-subtle
+          h2.text-lg.font-bold.text-white.mb-2
+            | Hello,&nbsp;
+            span.text-primary #{user ? user.username : 'Guest'}
+            | !
+          p.text-sm.text-on-surface-variant Select a channel from the left sidebar or start a direct message to begin chatting in real-time.
+
+        div(class="grid grid-cols-1 md:grid-cols-2 gap-6")
           .bg-surface-container-low.p-6.rounded-xl.border.border-border-subtle
             .flex.items-center.justify-between.mb-4
-              h3.text-label-md.font-bold.text-white Channels (#{rooms ? rooms.length : 0})
-              button.text-primary.text-label-sm.font-bold(onclick="document.getElementById('open-create-room-modal').click()") + Create
-            .space-y-2
+              h3.text-sm.font-bold.text-white
+                | Channels&nbsp;
+                span.text-on-surface-variant.font-normal (#{rooms ? rooms.length : 0})
+              button.text-primary.text-sm.font-bold(onclick="document.getElementById('open-create-room-modal').click()") + Create
+            .space-y-2(id="overview-channels-list")
               if rooms && rooms.length
                 each r in rooms
-                  a.flex.items-center.justify-between.p-3.rounded.bg-surface-container.hover_bg-surface-container-high.transition-colors(href=`/room/${r.slug}`)
+                  - if (r.type === 'dm' || r.type === 'direct') continue
+                  a.flex.items-center.justify-between.p-3.rounded.bg-surface-container.transition-colors.sidebar-item(href=`/room/${r.slug}`)
                     .flex.items-center.gap-2
                       span.material-symbols-outlined.text-on-surface-variant tag
-                      span.text-label-md.text-white.font-bold #{r.name}
-                    span.text-caption.text-on-surface-variant Open ->
+                      span.text-sm.text-white.font-bold #{r.name}
+                    span.text-xs.text-on-surface-variant Open →
               else
-                p.text-caption.text-on-surface-variant No public channels yet. Create one above!
+                p.text-xs.text-on-surface-variant No public channels yet. Create one above!
 
           .bg-surface-container-low.p-6.rounded-xl.border.border-border-subtle
-            h3.text-label-md.font-bold.text-white.mb-4 Active Team Members (#{users ? users.length : 0})
+            h3.text-sm.font-bold.text-white.mb-4
+              | Active Team Members&nbsp;
+              span.text-on-surface-variant.font-normal (#{users ? users.length : 0})
             .space-y-2
               if users && users.length
                 each u in users
-                  a.flex.items-center.justify-between.p-3.rounded.bg-surface-container.hover_bg-surface-container-high.transition-colors(href=`/chat/user/${u._id}`)
+                  a.flex.items-center.justify-between.p-3.rounded.bg-surface-container.transition-colors.sidebar-item(href=`/chat/user/${u._id}`)
                     .flex.items-center.gap-3
                       .w-8.h-8.rounded.bg-blue-500.overflow-hidden
                         img.w-full.h-full.object-cover(src=u.avatar || '/img/default.jpg', alt=u.username)
                       div
-                        .text-label-md.text-white.font-bold #{u.username}
-                        .text-caption.text-on-surface-variant status: #{u.status || 'offline'}
-                    span.text-caption.text-secondary Message ->
+                        .text-sm.text-white.font-bold #{u.username}
+                        .text-xs.text-on-surface-variant #{u.status || 'offline'}
+                    span.text-xs.text-secondary Message →
               else
-                p.text-caption.text-on-surface-variant No other team members found.
+                p.text-xs.text-on-surface-variant No other team members found.

@@ -41,7 +41,11 @@ router.delete("/:roomId/leave", roomController.leaveRoom);
 router
   .route("/:roomId/members")
   .get(roomController.getRoomMembers) // List members with roles
-  .post(roomController.addRoomMember); // Invite / Add user
+  .post(roomController.addRoomMember) // Invite / Add single user
+  .patch(roomController.addRoomMembers); // Invite / Add multiple users (bulk)
+
+// Candidates (users not yet in the room) for the member picker
+router.get("/:roomId/candidates", roomController.getAddCandidates);
 
 router
   .route("/:roomId/members/:userId")

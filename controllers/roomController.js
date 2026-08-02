@@ -1,7 +1,9 @@
 import Room from "../models/Room.js";
 import RoomMember from "../models/RoomMember.js";
+import User from "../models/User.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { findOrCreateDMRoom } from "../utils/dmUtils.js";
 
 // Helper function to convert channel names to URL slugs
 const slugify = (text) => {
@@ -45,12 +47,19 @@ export const createRoom = catchAsync(async (req, res, next) => {
     return next(new AppError("a room with this name already exists", 400));
   }
 
+  const allowedTypes = ["public", "private", "direct", "dm"];
+  const roomType =
+    type && allowedTypes.includes(type)
+      ? type
+      : isPrivate === true || isPrivate === "on" || isPrivate === "true"
+        ? "private"
+        : "public";
+
   const room = await Room.create({
     name,
     slug,
-    description,
-    isPrivate: isPrivate || false,
-    type: type || "channel",
+    topic: description,
+    type: roomType,
     createdBy: req.user.id,
   });
 
@@ -67,7 +76,8 @@ export const createRoom = catchAsync(async (req, res, next) => {
 });
 
 export const getOrCreateDM = catchAsync(async (req, res, next) => {
-  const { targetUserId } = req.body;
+  // Accept both field names (older clients send "targetUserId", newer send "recipientId")
+  const targetUserId = req.body.targetUserId || req.body.recipientId;
 
   if (!targetUserId) {
     return next(
@@ -81,44 +91,16 @@ export const getOrCreateDM = catchAsync(async (req, res, next) => {
     );
   }
 
-  // Find DM rooms where current user is a member
-  const myDMs = await RoomMember.find({ user: req.user.id }).select("room");
-  const myDMRoomIds = myDMs.map((m) => m.room);
-
-  // Check if target user is also in any of those DM rooms
-  const existingDMMembership = await RoomMember.findOne({
-    user: targetUserId,
-    room: { $in: myDMRoomIds },
-  }).populate({
-    path: "room",
-    match: { type: "dm" },
+  // Find the existing DM room between the two users, or create it
+  // (deterministic slug + race-safe, so both sides always share one room).
+  const room = await findOrCreateDMRoom({
+    userA: req.user.id,
+    userB: targetUserId,
   });
 
-  if (existingDMMembership && existingDMMembership.room) {
-    return res.status(200).json({
-      status: "success",
-      data: { room: existingDMMembership.room },
-    });
-  }
-
-  // Create new DM room
-  const newDMRoom = await Room.create({
-    name: `dm-${req.user.id}-${targetUserId}`,
-    slug: `dm-${Date.now()}`,
-    isPrivate: true,
-    type: "dm",
-    createdBy: req.user.id,
-  });
-
-  // Add both users as members
-  await RoomMember.insertMany([
-    { room: newDMRoom._id, user: req.user.id, role: "member" },
-    { room: newDMRoom._id, user: targetUserId, role: "member" },
-  ]);
-
-  res.status(201).json({
+  res.status(200).json({
     status: "success",
-    data: { room: newDMRoom },
+    data: { room },
   });
 });
 
@@ -315,6 +297,119 @@ export const addRoomMember = catchAsync(async (req, res, next) => {
 });
 
 /**
+ * @desc    Get registered users who are NOT yet members of this room
+ * @route   GET /api/v1/rooms/:roomId/candidates
+ */
+export const getAddCandidates = catchAsync(async (req, res, next) => {
+  const room = await Room.findById(req.params.roomId);
+  if (!room) {
+    return next(new AppError("no room found with that id", 404));
+  }
+
+  const caller = await RoomMember.findOne({
+    room: room._id,
+    user: req.user.id,
+  });
+  if (!caller) {
+    return next(new AppError("you are not a member of this room", 403));
+  }
+
+  const members = await RoomMember.find({ room: room._id }).select("user");
+  const memberIds = members.map((m) => m.user);
+
+  const users = await User.find({
+    _id: { $nin: memberIds },
+    active: { $ne: false },
+  }).select("username avatar status email");
+
+  res.status(200).json({
+    status: "success",
+    results: users.length,
+    data: { users },
+  });
+});
+
+/**
+ * @desc    Add / invite multiple users to a room (bulk)
+ * @route   PATCH /api/v1/rooms/:roomId/members
+ */
+export const addRoomMembers = catchAsync(async (req, res, next) => {
+  const { userIds, userId } = req.body;
+
+  let ids = Array.isArray(userIds) ? userIds : [];
+  if (!ids.length && userId) ids = [userId];
+  if (!ids.length) {
+    return next(new AppError("Please provide userIds to add", 400));
+  }
+
+  // Verify caller is member with admin/moderator privileges
+  const caller = await RoomMember.findOne({
+    room: req.params.roomId,
+    user: req.user.id,
+  });
+
+  if (!caller || !["admin", "moderator"].includes(caller.role)) {
+    return next(
+      new AppError(
+        "You do not have permission to invite users to this room",
+        403,
+      ),
+    );
+  }
+
+  const room = await Room.findById(req.params.roomId);
+  if (!room) {
+    return next(new AppError("no room found with that id", 404));
+  }
+
+  // Filter out users already in the room
+  const existing = await RoomMember.find({
+    room: room._id,
+    user: { $in: ids },
+  }).select("user");
+  const existingIds = new Set(existing.map((e) => e.user.toString()));
+  const toAdd = ids.filter((id) => !existingIds.has(id.toString()));
+
+  const memberships = [];
+  if (toAdd.length) {
+    memberships.push(
+      ...(await RoomMember.insertMany(
+        toAdd.map((uid) => ({
+          room: room._id,
+          user: uid,
+          role: "member",
+        })),
+      )),
+    );
+
+    // Also push the ids into the room's members array (deduped)
+    room.members = [
+      ...new Set([...room.members.map(String), ...toAdd.map(String)]),
+    ];
+    await room.save();
+  }
+
+  const addedUsers = await User.find({ _id: { $in: toAdd } }).select(
+    "username avatar status email",
+  );
+
+  // Broadcast member-join notification to the room
+  const io = req.app.get("io");
+  if (io) {
+    io.to(room._id.toString()).emit("member_added", {
+      roomId: room._id,
+      members: addedUsers.map((u) => ({ user: u, role: "member" })),
+    });
+  }
+
+  res.status(201).json({
+    status: "success",
+    results: memberships.length,
+    data: { members: memberships },
+  });
+});
+
+/**
  * @desc    Update a member's role inside a room (e.g. member -> moderator)
  * @route   PATCH /api/v1/rooms/:roomId/members/:userId
  */
@@ -375,6 +470,21 @@ export const removeRoomMember = catchAsync(async (req, res, next) => {
 
   if (!removed) {
     return next(new AppError("Member not found in this room", 404));
+  }
+
+  // Also remove the user from the room's members array
+  await Room.updateOne(
+    { _id: req.params.roomId },
+    { $pull: { members: req.params.userId } },
+  );
+
+  // Broadcast member-removal notification to the room
+  const io = req.app.get("io");
+  if (io) {
+    io.to(req.params.roomId).emit("member_removed", {
+      roomId: req.params.roomId,
+      userId: req.params.userId,
+    });
   }
 
   res.status(204).json({

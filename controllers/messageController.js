@@ -72,7 +72,27 @@ export const createMessage = catchAsync(async (req, res, next) => {
   const { content, replyTo } = req.body;
   const { roomId } = req.params;
 
-  // 1. Process uploaded files if any exist
+  // 1. Check & ensure membership in room
+  let membership = await checkRoomAccess(roomId, req.user.id);
+  if (!membership) {
+    // Check if room exists and is public
+    const Room = (await import("../models/Room.js")).default;
+    const roomDoc = await Room.findById(roomId);
+    if (!roomDoc) {
+      return next(new AppError("No room found with that ID", 404));
+    }
+    if (roomDoc.isPrivate) {
+      return next(new AppError("You do not have access to this private room", 403));
+    }
+    // Auto-join public room
+    membership = await RoomMember.create({
+      room: roomId,
+      user: req.user.id,
+      role: "member",
+    });
+  }
+
+  // 2. Process uploaded files if any exist
   let attachments = [];
   if (req.files && req.files.length > 0) {
     attachments = req.files.map((file) => {

@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import userRoutes from "./routes/userRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import workspaceRoutes from "./routes/workspaceRoutes.js";
 import viewRoutes from "./routes/viewRoutes.js";
 
 // Re-create __dirname for ES Modules
@@ -38,6 +39,7 @@ app.use("/", viewRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/rooms", roomRoutes);
 app.use("/api/v1/messages", messageRoutes);
+app.use("/api/v1/workspace", workspaceRoutes);
 
 // Unhandled Route Handler (404)
 app.use((req, res, next) => {

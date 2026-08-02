@@ -20,6 +20,15 @@ export const initSocket = (server) => {
         socket.handshake.headers?.authorization ||
         socket.handshake.headers?.Authorization;
 
+      // Fallback: read the httpOnly "jwt" cookie from the handshake headers
+      if (!rawToken && socket.handshake.headers?.cookie) {
+        const jwtCookie = socket.handshake.headers.cookie
+          .split(";")
+          .map((c) => c.trim())
+          .find((c) => c.startsWith("jwt="));
+        if (jwtCookie) rawToken = jwtCookie.slice(4);
+      }
+
       if (!rawToken) {
         return next(new Error("authentication error : token missing"));
       }

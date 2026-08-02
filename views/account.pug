@@ -3,45 +3,62 @@ extends _base
 block content
   main.flex-1.flex.flex-col.bg-main-bg.overflow-y-auto.p-8
     .max-w-2xl.mx-auto.w-full.space-y-8
-      h1.text-headline-lg.font-bold.text-white Account Settings
 
+      h1.text-2xl.font-bold.text-white Account Settings
+
+      //- Profile Information
       .bg-surface-container.border.border-border-subtle.rounded-xl.p-6.space-y-6
-        h2.text-headline-md.font-bold.text-primary Profile Information
-        div.hidden.p-3.rounded.bg-primary-container\/20.border.border-primary.text-primary.text-label-md(id="profile-success-alert")
-        
+        h2.text-lg.font-bold.text-primary Profile Information
+        div.hidden.p-3.rounded.border.border-primary.text-primary.text-sm(id="profile-success-alert", style="background:rgba(121,217,178,0.1)")
+
         form(id="update-profile-form", enctype="multipart/form-data")
           .flex.items-center.gap-6.mb-6
-            .w-20.h-20.rounded-xl.bg-blue-500.overflow-hidden
-              img.w-full.h-full.object-cover(src=user.avatar || "/img/default.jpg", alt="avatar", id="avatar-preview")
+            .relative.cursor-pointer
+              .w-20.h-20.rounded-xl.bg-blue-500.overflow-hidden
+                img.w-full.h-full.object-cover(src=user.avatar || "/img/default.jpg", alt="avatar", id="avatar-preview")
+              label.absolute.inset-0.flex.items-center.justify-center.rounded-xl.cursor-pointer(for="photo-input", style="background:rgba(0,0,0,0.5);opacity:0;transition:opacity 150ms;").avatar-overlay
+                span.material-symbols-outlined.text-white photo_camera
+              input.hidden(type="file", name="photo", accept="image/*", id="photo-input")
             div
-              label.block.text-label-sm.text-on-surface-variant.mb-1 Change Avatar Photo
-              input.text-white.text-caption(type="file", name="photo", accept="image/*", id="photo-input")
+              p.text-sm.font-bold.text-white #{user.username}
+              p.text-xs.text-on-surface-variant #{user.email}
+              p.text-xs.text-primary.mt-1 Hover avatar to change photo
 
           .mb-4
-            label.block.text-label-md.text-white.mb-1 Username
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="text", name="username", value=user.username, required=true)
+            label.block.text-sm.text-white.mb-1(for="edit-username") Username
+            input.w-full.rounded.p-3.text-white.input-field(type="text", id="edit-username", name="username", value=user.username, required=true)
           .mb-4
-            label.block.text-label-md.text-white.mb-1 Email
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="email", name="email", value=user.email, required=true)
+            label.block.text-sm.text-white.mb-1(for="edit-email") Email
+            input.w-full.rounded.p-3.text-white.input-field(type="email", id="edit-email", name="email", value=user.email, required=true)
           .mb-6
-            label.block.text-label-md.text-white.mb-1 Status Bio
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="text", name="bio", value=user.bio || "", placeholder="What's your working status?")
-          
-          button.px-6.py-2.5.bg-primary-container.text-on-primary-container.font-bold.rounded-lg(type="submit") Save Profile
+            label.block.text-sm.text-white.mb-1(for="edit-bio") Status / Bio
+            input.w-full.rounded.p-3.text-white.input-field(type="text", id="edit-bio", name="bio", value=user.bio || "", placeholder="What's your status?")
 
+          button(class="px-6 py-2 rounded-lg font-bold btn-primary", type="submit") Save Profile
+
+      //- Update Password
       .bg-surface-container.border.border-border-subtle.rounded-xl.p-6.space-y-6
-        h2.text-headline-md.font-bold.text-primary Update Password
-        div.hidden.p-3.rounded.bg-primary-container\/20.border.border-primary.text-primary.text-label-md(id="password-success-alert")
-        
+        h2.text-lg.font-bold.text-primary Update Password
+        div.hidden.p-3.rounded.border.border-primary.text-primary.text-sm(id="password-success-alert", style="background:rgba(121,217,178,0.1)")
+
         form(id="update-password-form")
           .mb-4
-            label.block.text-label-md.text-white.mb-1 Current Password
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="currentPassword", required=true)
+            label.block.text-sm.text-white.mb-1(for="currentPassword") Current Password
+            input.w-full.rounded.p-3.text-white.input-field(type="password", id="currentPassword", required=true)
           .mb-4
-            label.block.text-label-md.text-white.mb-1 New Password
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="newPassword", required=true)
+            label.block.text-sm.text-white.mb-1(for="newPassword") New Password
+            input.w-full.rounded.p-3.text-white.input-field(type="password", id="newPassword", required=true)
           .mb-6
-            label.block.text-label-md.text-white.mb-1 Confirm New Password
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="confirmPassword", required=true)
-          
-          button.px-6.py-2.5.bg-secondary-container.text-white.font-bold.rounded-lg(type="submit") Update Password
+            label.block.text-sm.text-white.mb-1(for="confirmPassword") Confirm New Password
+            input.w-full.rounded.p-3.text-white.input-field(type="password", id="confirmPassword", required=true)
+
+          button(class="px-6 py-2 rounded-lg font-bold btn-primary", type="submit") Update Password
+
+      //- Danger Zone
+      .bg-surface-container.border.border-error.rounded-xl.p-6
+        h2.text-lg.font-bold.text-error.mb-2 Danger Zone
+        p.text-sm.text-on-surface-variant.mb-4 Deactivating your account will sign you out and hide your profile.
+        button(class="px-6 py-2 border border-error text-error font-bold rounded-lg", id="delete-account-btn") Deactivate Account
+
+    style.
+      .avatar-overlay:hover { opacity: 1 !important; }

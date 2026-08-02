@@ -3,6 +3,7 @@ extends _base
 block content
   main.flex-1.flex.flex-col.items-center.justify-center.bg-main-bg.p-6
     .w-full.max-w-md.bg-surface-container.border.border-border-subtle.p-8.rounded-2xl.shadow-2xl.text-center
-      h1.text-headline-lg.font-bold.text-error.mb-2 Something went wrong!
-      p.text-body-md.text-on-surface-variant.mb-6 #{msg || 'An unexpected error occurred.'}
-      a.px-6.py-3.bg-primary-container.text-on-primary-container.font-bold.rounded-lg.inline-block(href="/") Back to Workspace
+      span.material-symbols-outlined.text-error.block.mb-4(style="font-size:48px") error
+      h1.text-2xl.font-bold.text-error.mb-2 Oops! Something went wrong.
+      p.text-sm.text-on-surface-variant.mb-8 #{msg || 'An unexpected error occurred. Please try again.'}
+      a.px-6.py-3.rounded-lg.font-bold.inline-block.btn-primary(href="/") Back to Workspace

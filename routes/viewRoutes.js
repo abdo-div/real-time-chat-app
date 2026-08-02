@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  fetchSidebarData,
   getOverview,
   getRoomView,
   getDirectMessageView,
@@ -15,6 +16,9 @@ const router = express.Router();
 
 // Apply isLoggedIn middleware to all view routes to populate res.locals.user if logged in
 router.use(isLoggedIn);
+
+// Fetch sidebar data (channels + users) for every route so the sidebar never breaks
+router.use(fetchSidebarData);
 
 // Public View Routes
 router.get("/", getOverview);

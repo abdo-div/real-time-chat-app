@@ -37,7 +37,7 @@ html.dark(lang="en")
               DEFAULT: "0.125rem",
               lg: "0.25rem",
               xl: "0.5rem",
-              full: "0.75rem"
+              "2xl": "1rem"
             },
             spacing: {
               "sidebar-width": "260px",
@@ -61,80 +61,143 @@ html.dark(lang="en")
       .presence-glow { box-shadow: 0 0 8px rgba(43, 172, 118, 0.4); }
       .message-hover:hover .message-actions { opacity: 1; transform: translateY(0); }
       .message-actions { opacity: 0; transform: translateY(4px); transition: all 150ms ease; }
+      .sidebar-item:hover { background: #272a2e; }
+      .sidebar-item.active { background: #323539; color: #fff; font-weight: 600; }
+      .btn-primary { background: #007a5a; color: #a4ffd8; font-weight: 700; }
+      .btn-primary:hover { opacity: 0.9; }
+      .input-field {
+        background-color: #1d2024 !important;
+        border: 1px solid #35373B !important;
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+      }
+      .input-field::placeholder { color: #9CA3AF !important; opacity: 1 !important; }
+      .input-field:focus { outline: none !important; border-color: #007a5a !important; box-shadow: 0 0 0 2px rgba(0,122,90,0.5) !important; }
+      input, textarea, select {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+      }
+      input::placeholder, textarea::placeholder { color: #9CA3AF !important; opacity: 1 !important; }
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus {
+        -webkit-text-fill-color: #FFFFFF !important;
+        -webkit-box-shadow: 0 0 0px 1000px #1d2024 inset !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
+      .msg-hover-actions { opacity: 0; transform: translateY(4px); transition: all 150ms ease; }
+      .message-hover:hover .msg-hover-actions { opacity: 1; transform: translateY(0); }
 
   body.flex.flex-col.h-screen.overflow-hidden.text-on-surface
     //- Top Navigation Bar
-    header.fixed.top-0.w-full.h-\[44px\].bg-sidebar-bg.flex.items-center.justify-between.px-gutter.z-50.border-b.border-border-subtle
+    header.fixed.top-0.w-full.h-11.bg-sidebar-bg.flex.items-center.justify-between.px-gutter.z-50.border-b.border-border-subtle
       .flex.items-center.gap-4
-        a.text-headline-md.font-headline-md.text-primary.font-bold(href="/") SlackFlow
-      .flex-1.max-w-2xl.px-8.hidden.md_block
-        .relative.group
+        a.text-primary.font-bold.text-lg(href="/") SlackFlow
+
+      div(class="flex-1 max-w-2xl px-8 hidden md:block")
+        .relative
           .absolute.inset-y-0.left-3.flex.items-center.pointer-events-none.text-on-surface-variant
-            span.material-symbols-outlined.text-\[18px\] search
-          input.w-full.bg-surface-container-low.border.border-border-subtle.rounded-lg.py-1.pl-10.pr-4.text-body-md.focus_outline-none.focus_ring-2.focus_ring-secondary-container.transition-all(type="text", placeholder="Search channels, users or messages...", id="global-search")
+            span.material-symbols-outlined.text-sm search
+          input.w-full.py-1.pl-10.pr-4.text-sm.rounded-lg.input-field(type="text", placeholder="Search channels, users or messages...", id="global-search")
+
       .flex.items-center.gap-3
         if user
-          a.flex.items-center.gap-2.text-on-surface-variant.hover_bg-surface-container-highest.p-1.rounded-lg.transition-colors(href="/me", title="Account Settings")
+          a.flex.items-center.gap-2.text-on-surface-variant.p-1.rounded-lg(href="/me", title="Account Settings", style="transition:background 150ms")
             .h-7.w-7.rounded.bg-secondary-container.overflow-hidden
               img.w-full.h-full.object-cover(src=user.avatar || "/img/default.jpg", alt=user.username)
-            span.text-label-md.text-white.hidden.sm_inline #{user.username}
-          button.text-on-surface-variant.hover_text-white.p-1.rounded-lg(id="logout-btn", title="Logout")
+            span.text-sm.text-white(class="hidden sm:inline") #{user.username}
+          button.text-on-surface-variant.p-1.rounded-lg(id="logout-btn", title="Logout")
             span.material-symbols-outlined logout
         else
-          a.px-3.py-1.bg-primary-container.text-on-primary-container.rounded.text-label-md.font-bold(href="/login") Log In
-          a.px-3.py-1.bg-surface-container-highest.text-white.rounded.text-label-md.font-bold(href="/signup") Sign Up
+          a.px-3.py-1.rounded.text-sm.font-bold.btn-primary(href="/login") Log In
+          a.px-3.py-1.rounded.text-sm.font-bold.bg-surface-container-highest.text-white(href="/signup") Sign Up
 
-    .flex.flex-1.mt-\[44px\].overflow-hidden
+    .flex.flex-1.mt-11.overflow-hidden
       //- Sidebar Navigation
       if user
-        aside.hidden.md_flex.flex-col.w-sidebar-width.bg-sidebar-bg.border-r.border-border-subtle.overflow-y-auto
-          //- Workspace Header
-          .p-gutter.flex.items-center.justify-between.hover_bg-surface-container-highest.cursor-pointer.transition-colors.group
-            .flex.items-center.gap-2
-              .w-9.h-9.bg-primary-container.rounded-lg.flex.items-center.justify-center.text-on-primary-container.font-bold.text-headline-md ET
-              .overflow-hidden
-                h2.text-label-md.font-label-md.text-text-primary.truncate RealTime Workspace
-                .flex.items-center.gap-1.5
-                  .w-2.5.h-2.5.bg-presence-online.rounded-full.presence-glow
-                  span.text-caption.text-on-surface-variant #{user.username} (Online)
-          
-          nav.mt-4.px-2.space-y-0.5
-            a.flex.items-center.gap-3.px-3.py-1.5.bg-secondary-container.text-white.font-bold.rounded-none.cursor-pointer(href="/")
-              span.material-symbols-outlined.text-\[20px\] forum
-              span.text-label-md Dashboard & Threads
+        aside(class="hidden md:flex flex-col w-sidebar-width bg-sidebar-bg border-r border-border-subtle overflow-y-auto")
+          //- Workspace Header (badge + dropdown)
+          - const wsName = (workspace && workspace.name) || 'RealTime Workspace'
+          - const wsInitials = wsName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          - const wsLogo = (workspace && workspace.logo) || ''
+          - const wsBadgeStyle = (workspace && workspace.badgeStyle) || 'initials'
+          .relative.p-gutter(style="transition:background 150ms")
+            button(class="flex items-center justify-between w-full gap-2 rounded-lg cursor-pointer text-left p-1.5",
+              id="workspace-menu-btn",
+              data-name=wsName,
+              data-logo=wsLogo,
+              data-badge-style=wsBadgeStyle,
+              data-initials=wsInitials,
+              data-can-manage=(user && user.role === 'admin' ? 'true' : 'false'),
+              title="Workspace menu",
+              style="transition:background 150ms"
+            )
+              .flex.items-center.gap-2.min-w-0
+                .w-9.h-9.bg-primary-container.rounded-lg.flex.items-center.justify-center.text-on-primary-container.font-bold.overflow-hidden.shrink-0
+                  if wsLogo
+                    img.w-full.h-full.object-cover(src=wsLogo, alt=wsName)
+                  else if wsBadgeStyle === 'icon'
+                    span.material-symbols-outlined workspaces
+                  else
+                    span #{wsInitials}
+                .overflow-hidden.min-w-0
+                  h2.text-sm.font-bold.text-white.truncate #{wsName}
+                  div(class="flex items-center gap-1.5 mt-0.5")
+                    .w-2.h-2.bg-presence-online.rounded-full.presence-glow
+                    span.text-xs.text-on-surface-variant.truncate #{user.username} — Online
+              span.material-symbols-outlined.text-on-surface-variant.text-sm(id="workspace-menu-chevron") expand_more
+
+            div.hidden.absolute.left-2.right-2.top-full.mt-1.bg-surface-container-high.border.border-border-subtle.rounded-xl.shadow-2xl.z-50.py-1(id="workspace-menu")
+              button.flex.items-center.gap-2.w-full.px-3.py-2.text-sm.text-white.cursor-pointer(id="ws-menu-settings", style="transition:background 150ms")
+                span.material-symbols-outlined.text-lg settings
+                span Workspace Settings
+              button.flex.items-center.gap-2.w-full.px-3.py-2.text-sm.text-white.cursor-pointer(id="ws-menu-invite", style="transition:background 150ms")
+                span.material-symbols-outlined.text-lg person_add
+                span Invite Members
+              a.flex.items-center.gap-2.w-full.px-3.py-2.text-sm.text-white.cursor-pointer(href="/me", style="transition:background 150ms")
+                span.material-symbols-outlined.text-lg tune
+                span Preferences
+
+          nav(class="mt-4 px-2 space-y-0.5")
+            a(class="flex items-center gap-3 px-3 py-1.5 bg-secondary-container text-white font-bold cursor-pointer", href="/")
+              span.material-symbols-outlined.text-xl forum
+              span.text-sm Dashboard
 
           //- Channels List
           .mt-6
             .px-5.py-2.flex.items-center.justify-between.group
-              span.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold Channels
-              button.material-symbols-outlined.text-on-surface-variant.text-\[18px\].hover_text-white(id="open-create-room-modal", title="Create Channel") add
-            .space-y-0.5.px-2(id="sidebar-channels-list")
+              span.text-xs.uppercase.tracking-wider.text-on-surface-variant.font-bold Channels
+              button.text-on-surface-variant.text-lg.material-symbols-outlined(id="open-create-room-modal", title="Create Channel") add
+            div(class="space-y-0.5 px-2", id="sidebar-channels-list")
               if rooms && rooms.length
                 each r in rooms
-                  a.flex.items-center.gap-3.px-3.py-1.text-on-surface-variant.hover_bg-surface-container-low.cursor-pointer.rounded-none(href=`/room/${r.slug}`, class=(room && room.slug === r.slug ? 'text-white bg-surface-container-highest font-semibold' : ''))
-                    span.material-symbols-outlined.text-\[16px\] tag
-                    span.text-label-md #{r.name}
+                  - if (r.type === 'dm' || r.type === 'direct') continue
+                  - const isActive = room && room.slug === r.slug
+                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/room/${r.slug}`, class=isActive ? 'active' : 'text-on-surface-variant')
+                    span.material-symbols-outlined.text-base tag
+                    span.text-sm #{r.name}
               else
-                .px-3.py-1.text-caption.text-on-surface-variant No channels found
+                .px-3.py-1.text-xs.text-on-surface-variant No channels found
 
           //- Direct Messages List
           .mt-6
-            .px-5.py-2.flex.items-center.justify-between.group
-              span.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold Direct Messages
-            .space-y-0.5.px-2(id="sidebar-users-list")
+            .px-5.py-2.flex.items-center.justify-between
+              span.text-xs.uppercase.tracking-wider.text-on-surface-variant.font-bold Direct Messages
+            div(class="space-y-0.5 px-2", id="sidebar-users-list")
               if users && users.length
                 each u in users
-                  a.flex.items-center.gap-3.px-3.py-1.text-on-surface-variant.hover_bg-surface-container-low.cursor-pointer.rounded-none(href=`/chat/user/${u._id}`, class=(recipient && recipient._id.toString() === u._id.toString() ? 'text-white bg-surface-container-highest font-semibold' : ''))
+                  - const isDMActive = recipient && recipient._id.toString() === u._id.toString()
+                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/chat/user/${u._id}`, class=isDMActive ? 'active' : 'text-on-surface-variant')
                     .relative
                       .w-5.h-5.rounded.bg-blue-500.overflow-hidden
                         img.w-full.h-full.object-cover(src=u.avatar || "/img/default.jpg", alt=u.username)
                       div(class=`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${u.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
-                    span.text-label-md #{u.username}
+                    span.text-sm #{u.username}
               else
-                .px-3.py-1.text-caption.text-on-surface-variant No other users
+                .px-3.py-1.text-xs.text-on-surface-variant No other users
 
           .mt-auto.p-4.border-t.border-border-subtle.bg-surface-container-low
-            a.w-full.block.text-center.py-2.bg-primary-container.text-on-primary-container.rounded.text-label-md.font-bold.mb-2.hover_opacity-90.transition-opacity(href="/me") My Profile & Status
+            a.w-full.block.text-center.py-2.rounded.text-sm.font-bold.btn-primary(href="/me") My Profile & Status
 
       //- Main Content Body Block
       block content
@@ -143,22 +206,96 @@ html.dark(lang="en")
     div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="create-room-modal")
       .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-md.p-6.shadow-2xl
         .flex.items-center.justify-between.mb-4
-          h3.text-headline-md.font-bold.text-white Create a Channel
-          button.text-on-surface-variant.hover_text-white(id="close-create-room-modal")
+          h3.text-lg.font-bold.text-white Create a Channel
+          button.text-on-surface-variant(id="close-create-room-modal")
             span.material-symbols-outlined close
         form(id="create-room-form")
           .mb-4
-            label.block.text-label-sm.text-on-surface-variant.mb-1 Channel Name
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-2.text-white(type="text", name="name", placeholder="e.g. announcements", required=true)
+            label.block.text-sm.text-on-surface-variant.mb-1 Channel Name
+            input.w-full.rounded.p-2.text-white.input-field(type="text", name="name", placeholder="e.g. announcements", required=true)
           .mb-4
-            label.block.text-label-sm.text-on-surface-variant.mb-1 Description
-            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-2.text-white(type="text", name="description", placeholder="What is this channel about?")
+            label.block.text-sm.text-on-surface-variant.mb-1 Description
+            input.w-full.rounded.p-2.text-white.input-field(type="text", name="description", placeholder="What is this channel about?")
           .mb-6.flex.items-center.gap-2
             input(type="checkbox", name="isPrivate", id="isPrivate")
-            label.text-label-md.text-white(for="isPrivate") Make private channel
+            label.text-sm.text-white(for="isPrivate") Make private channel
           .flex.justify-end.gap-3
             button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="cancel-create-room") Cancel
-            button.px-4.py-2.bg-primary-container.text-on-primary-container.rounded.font-bold(type="submit") Create Channel
+            button.px-4.py-2.rounded.font-bold.btn-primary(type="submit") Create Channel
+
+    //- Confirmation Dialog Modal (centered popup)
+    div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="confirm-dialog")
+      .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-sm.p-6.shadow-2xl
+        .flex.items-center.justify-between.mb-3
+          h3.text-lg.font-bold.text-white(id="confirm-dialog-title") Confirm
+          button.text-on-surface-variant.rounded.p-1(id="confirm-dialog-close", title="Close")
+            span.material-symbols-outlined close
+        p.text-sm.text-on-surface-variant.leading-relaxed.mb-6(id="confirm-dialog-message")
+        .flex.justify-end.gap-3
+          button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="confirm-dialog-cancel") Cancel
+          button.px-4.py-2.rounded.font-bold.bg-error.text-black(type="button", id="confirm-dialog-ok") Confirm
+
+    //- File Preview Modal (inline viewer for images & PDFs)
+    div.hidden.fixed.inset-0.bg-black.bg-opacity-80.z-50.flex.items-center.justify-center.p-4(id="file-preview-modal")
+      div(class="bg-sidebar-bg border border-border-subtle rounded-xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden", style="max-height:85vh")
+        .flex.items-center.justify-between.px-4.py-2.border-b.border-border-subtle.shrink-0
+          span.text-sm.font-bold.text-white.truncate.pr-4(id="file-preview-name")
+          .flex.items-center.gap-2
+            a.px-3.py-1.rounded.text-xs.font-bold.btn-primary.inline-flex.items-center.gap-1(id="file-preview-download", target="_blank", rel="noopener")
+              span.material-symbols-outlined.text-sm download
+              span Download
+            button.text-on-surface-variant.rounded.p-1.cursor-pointer(id="file-preview-close", title="Close")
+              span.material-symbols-outlined close
+        .flex-1.overflow-auto.bg-surface-container
+          iframe.w-full.border-0(id="file-preview-frame", style="min-height:65vh")
+
+    //- Workspace Settings Modal
+    div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="workspace-settings-modal")
+      .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-md.p-6.shadow-2xl
+        .flex.items-center.justify-between.mb-4
+          h3.text-lg.font-bold.text-white Workspace Settings
+          button.text-on-surface-variant(id="close-workspace-settings")
+            span.material-symbols-outlined close
+        if user && user.role === 'admin'
+          form(id="workspace-settings-form")
+            .mb-4
+              label.block.text-sm.text-on-surface-variant.mb-1 Workspace Name
+              input.w-full.rounded.p-2.text-white.input-field(type="text", id="ws-name-input", name="name", maxlength=40, required=true)
+            .mb-4
+              label.block.text-sm.text-on-surface-variant.mb-1 Workspace Logo
+              .flex.items-center.gap-3
+                .w-12.h-12.bg-primary-container.rounded-lg.flex.items-center.justify-center.overflow-hidden.shrink-0
+                  img.hidden.w-full.h-full.object-cover(id="ws-logo-preview")
+                  span.material-symbols-outlined.text-on-primary-container.hidden(id="ws-logo-icon") workspaces
+                  span.text-on-primary-container.font-bold(id="ws-logo-initials") ET
+                .flex.flex-col.gap-2
+                  label(class="px-3 py-1.5 rounded text-xs font-bold btn-primary cursor-pointer inline-block text-center") Select Logo...
+                    input.hidden(type="file", id="ws-logo-input", accept="image/*")
+                  button.text-xs.text-on-surface-variant.cursor-pointer.text-left(id="ws-logo-remove", type="button") Remove logo
+            .mb-4
+              label.block.text-sm.text-on-surface-variant.mb-1 Badge Style
+              select.w-full.rounded.p-2.text-white.input-field(id="ws-badge-style")
+                option(value="initials") Workspace initials
+                option(value="icon") App logo icon
+            .flex.justify-end.gap-3
+              button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="cancel-workspace-settings") Cancel
+              button.px-4.py-2.rounded.font-bold.btn-primary(type="submit") Save
+        else
+          p.text-sm.text-on-surface-variant.mb-6 Only admins can change workspace settings.
+          .flex.justify-end
+            button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="close-workspace-settings-ro") Close
+
+    //- Invite Members Modal
+    div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="invite-members-modal")
+      .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-md.p-6.shadow-2xl
+        .flex.items-center.justify-between.mb-4
+          h3.text-lg.font-bold.text-white Invite Members
+          button.text-on-surface-variant(id="close-invite-members")
+            span.material-symbols-outlined close
+        p.text-sm.text-on-surface-variant.mb-4 Share this link with people so they can sign up and join #{wsName}:
+        .flex.items-center.gap-2
+          input.w-full.rounded.p-2.text-white.input-field(type="text", id="invite-link", readonly=true)
+          button.px-3.py-2.rounded.text-xs.font-bold.btn-primary(id="copy-invite-link", type="button") Copy
 
     script(src="/socket.io/socket.io.js")
-    script(src="/js/app.js")
+    script(src="/js/app.js?v=2")

@@ -1,94 +1,182 @@
 extends _base
 
 block content
-  main.flex-1.flex.flex-col.bg-main-bg.relative.min-w-0(data-room-id=room._id, data-room-slug=room.slug)
+  - const isAdmin = currentMemberRole === 'admin'
+  - const canManage = currentMemberRole === 'admin' || currentMemberRole === 'moderator'
+  main.flex-1.flex.flex-col.bg-main-bg.relative.min-w-0(data-room-id=room._id, data-room-slug=room.slug, data-user-id=user._id, data-can-manage=canManage)
     //- Chat Header
-    header.h-\[49px\].border-b.border-border-subtle.flex.items-center.justify-between.px-section-padding.shrink-0.bg-main-bg\/80.backdrop-blur-md.sticky.top-0.z-10
+    header.h-12.border-b.border-border-subtle.flex.items-center.justify-between.px-section-padding.shrink-0.bg-main-bg.sticky.top-0.z-10
       .flex.items-center.gap-2.overflow-hidden
         span.material-symbols-outlined.text-on-surface-variant tag
-        h1.text-headline-md.font-headline-md.text-text-primary.truncate #{room.name}
-        button.flex.items-center.gap-1.px-2.py-0.5.hover_bg-surface-container-highest.rounded.text-on-surface-variant.transition-colors
-          span.text-caption.font-bold #{roomMembers ? roomMembers.length : 1} members
-          span.material-symbols-outlined.text-\[14px\] keyboard_arrow_down
+        h1.text-lg.font-bold.text-white.truncate #{room.name}
+        button(class="flex items-center gap-1 px-2 py-0.5 rounded text-on-surface-variant bg-transparent")
+          span.text-xs.font-bold(id="header-member-count") #{roomMembers ? roomMembers.length : 1} members
+          span.material-symbols-outlined.text-sm keyboard_arrow_down
       .flex.items-center.gap-4
-        button.text-on-surface-variant.hover_text-white.transition-colors(id="toggle-info-btn")
+        button.text-on-surface-variant(id="toggle-info-btn", title="Channel Info")
           span.material-symbols-outlined info
 
     //- Message Feed Area
     .flex-1.overflow-y-auto.px-section-padding.pt-6.space-y-6.pb-4(id="message-feed")
       .relative.flex.items-center.py-4
         .flex-grow.border-t.border-border-subtle
-        span.flex-shrink.mx-4.px-4.py-1.rounded-full.border.border-border-subtle.bg-surface-container.text-caption.font-bold.text-on-surface-variant Welcome to ##{room.name}!
+        span.flex-shrink.mx-4.px-4.py-1.rounded-full.border.border-border-subtle.bg-surface-container.text-xs.font-bold.text-on-surface-variant Welcome to ##{room.name}!
         .flex-grow.border-t.border-border-subtle
 
       if messages && messages.length
         each msg in messages
-          .flex.gap-4.group.message-hover(data-message-id=msg._id)
+          - const isOwn = user && msg.sender && msg.sender._id.toString() === user._id.toString()
+          div(class="flex gap-4 group message-hover px-3 py-1.5 rounded-lg -mx-3 hover:bg-surface-container-low transition-colors", data-message-id=msg._id)
             .shrink-0.w-10.h-10.rounded-lg.bg-indigo-500.overflow-hidden.mt-1
               img.w-full.h-full.object-cover(src=(msg.sender && msg.sender.avatar) ? msg.sender.avatar : "/img/default.jpg", alt="avatar")
             .flex-1.min-w-0
               .flex.items-baseline.gap-2
-                span.text-label-md.text-text-primary.hover_underline.cursor-pointer #{msg.sender ? msg.sender.username : 'User'}
-                span.text-caption.text-text-timestamp #{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-              .text-body-md.text-on-surface.mt-1.leading-relaxed #{msg.content}
+                span.text-sm.font-bold.text-white.cursor-pointer.msg-sender-name #{msg.sender ? msg.sender.username : 'User'}
+                span.text-xs.text-text-timestamp #{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                span.text-xs.text-text-timestamp.msg-edited-badge(class=(msg.isEdited ? '' : 'hidden')) (edited)
+              if msg.replyTo
+                .flex.items-center.gap-2.mb-1.border-l-2.border-secondary-container.pl-2.mt-1
+                  span.text-xs.font-bold.text-primary #{msg.replyTo.sender ? msg.replyTo.sender.username : 'User'}
+                  span.text-xs.text-on-surface-variant.truncate #{msg.replyTo.content}
+              .text-sm.text-on-surface.mt-1.leading-relaxed.msg-content #{msg.content}
 
               if msg.attachments && msg.attachments.length
                 each att in msg.attachments
-                  .mt-3.max-w-md.rounded-xl.overflow-hidden.border.border-border-subtle.bg-surface-container
-                    img.w-full.max-h-60.object-cover(src=att.fileUrl, alt="attachment")
+                  if att.fileType === 'image'
+                    button(type="button", class="att-preview mt-3 max-w-md rounded-xl overflow-hidden border border-border-subtle bg-surface-container block cursor-pointer", data-att-preview=att.url, data-att-name=(att.fileName || 'attachment'))
+                      img.w-full.max-h-60.object-cover(src=att.url, alt=(att.fileName || 'attachment'))
+                  else if att.fileName && att.fileName.toLowerCase().endsWith('.pdf')
+                    button(type="button", class="att-preview mt-3 max-w-md flex items-center gap-3 p-3 rounded-xl border border-border-subtle bg-surface-container hover:bg-surface-container-high transition-colors w-full text-left cursor-pointer", data-att-preview=att.url, data-att-name=(att.fileName || 'attachment'))
+                      span.material-symbols-outlined.text-on-surface-variant picture_as_pdf
+                      .min-w-0.flex-1
+                        p.text-sm.text-white.truncate #{att.fileName || 'Attachment'}
+                        p.text-xs.text-on-surface-variant Click to preview
+                      span.material-symbols-outlined.text-on-surface-variant open_in_new
+                  else
+                    a.mt-3.max-w-md.flex.items-center.gap-3.p-3.rounded-xl.border.border-border-subtle.bg-surface-container(href=att.url, target="_blank", rel="noopener", download=(att.fileName || ''))
+                      span.material-symbols-outlined.text-on-surface-variant attach_file
+                      .min-w-0.flex-1
+                        p.text-sm.text-white.truncate #{att.fileName || 'Attachment'}
+                        if att.fileSize
+                          p.text-xs.text-on-surface-variant #{Math.round(att.fileSize / 1024)} KB
 
-              if msg.reactions && msg.reactions.length
-                .flex.flex-wrap.gap-1.5.mt-3
+              .msg-reactions.flex.flex-wrap.gap-1.mt-3(class=(msg.reactions && msg.reactions.length ? '' : 'hidden'))
+                if msg.reactions && msg.reactions.length
                   each react in msg.reactions
-                    button.px-2.py-0.5.rounded-full.bg-secondary-container\/20.border.border-secondary-container.flex.items-center.gap-1.5
-                      span.text-\[14px\] #{react.emoji}
-                      span.text-label-sm.text-secondary.font-bold 1
+                    button(class="btn-react-pill px-2 py-0.5 rounded-full border border-secondary-container flex items-center gap-1 cursor-pointer", data-emoji=react.emoji, style="background:rgba(2,95,158,0.2)")
+                      span.text-sm #{react.emoji}
+                      span.text-xs.text-secondary.font-bold #{react.users.length}
 
-            .message-actions.sticky.top-0.flex.items-center.gap-0.5.bg-surface-container-high.border.border-border-subtle.rounded-lg.p-0.5.shadow-xl.h-fit
-              button.p-1.5.hover_bg-surface-container-highest.rounded.transition-colors.text-on-surface-variant.hover_text-white.btn-react(data-emoji="👍")
-                span.material-symbols-outlined.text-\[18px\] thumb_up
-              button.p-1.5.hover_bg-surface-container-highest.rounded.transition-colors.text-on-surface-variant.hover_text-white.btn-react(data-emoji="❤️")
-                span.material-symbols-outlined.text-\[18px\] favorite
-              button.p-1.5.hover_bg-surface-container-highest.rounded.transition-colors.text-on-surface-variant.hover_text-white.btn-react(data-emoji="🔥")
-                span.material-symbols-outlined.text-\[18px\] local_fire_department
+            div(class="msg-hover-actions self-center flex items-center gap-0.5 bg-surface-container-high border border-border-subtle rounded-lg p-0.5 shadow-xl")
+              button(class="p-1.5 rounded text-on-surface-variant btn-reply", title="Reply")
+                span.material-symbols-outlined.text-lg reply
+              if isOwn
+                button(class="p-1.5 rounded text-on-surface-variant btn-edit", title="Edit Message")
+                  span.material-symbols-outlined.text-lg edit
+                button(class="p-1.5 rounded text-on-surface-variant btn-delete", title="Delete Message")
+                  span.material-symbols-outlined.text-lg delete
+              button(class="p-1.5 rounded text-on-surface-variant btn-react", data-emoji="👍", title="Thumbs Up")
+                span.material-symbols-outlined.text-lg thumb_up
+              button(class="p-1.5 rounded text-on-surface-variant btn-react", data-emoji="❤️", title="Heart")
+                span.material-symbols-outlined.text-lg favorite
+              button(class="p-1.5 rounded text-on-surface-variant btn-react", data-emoji="🔥", title="Fire")
+                span.material-symbols-outlined.text-lg local_fire_department
+      else
+        .flex.flex-col.items-center.justify-center.h-full.opacity-50(id="empty-messages-state")
+          span.material-symbols-outlined.text-on-surface-variant(style="font-size:48px") forum
+          p.text-on-surface-variant.mt-2 No messages yet. Be the first to say something!
 
     //- Typing Indicator
-    div.hidden.px-section-padding.py-1.text-caption.text-primary.font-bold(id="typing-indicator") someone is typing...
+    div.hidden.px-section-padding.py-1.text-xs.text-primary.font-bold(id="typing-indicator") someone is typing...
 
     //- Message Input Area
     footer.p-section-padding.shrink-0.bg-main-bg
+      div.hidden.flex.items-center.mb-2(id="reply-bar")
+        div(class="max-w-5xl mx-auto flex items-center gap-3 border border-border-subtle rounded-xl bg-surface-container px-3 py-2")
+          span.material-symbols-outlined.text-on-surface-variant.text-lg reply
+          .flex-1.min-w-0
+            span.text-xs.font-bold.text-primary Replying to #[span(id="reply-bar-name")]
+            p.text-xs.text-on-surface-variant.truncate(id="reply-bar-content")
+          button.text-on-surface-variant.p-1.rounded.cursor-pointer(id="cancel-reply-btn", title="Cancel Reply")
+            span.material-symbols-outlined.text-lg close
       form(id="chat-form")
-        .max-w-5xl.mx-auto.border.border-border-subtle.rounded-xl.bg-surface-container.overflow-hidden.shadow-2xl.focus-within_ring-2.focus-within_ring-secondary-container.transition-shadow
+        .max-w-5xl.mx-auto.border.border-border-subtle.rounded-xl.bg-surface-container.overflow-hidden.shadow-2xl
           .flex.flex-col
-            textarea.w-full.bg-transparent.border-none.focus_ring-0.text-body-md.text-text-primary.p-4.resize-none.min-h-\[50px\].max-h-\[400px\].overflow-y-auto(id="message-input", placeholder=`Message #${room.name}`, rows="1")
-            .flex.items-center.justify-between.px-3.py-2.bg-surface-container-high\/50
+            textarea.w-full.bg-transparent.border-none.text-sm.text-white.p-4.resize-none.overflow-y-auto(id="message-input", placeholder=`Message #${room.name}`, rows="1", style="min-height:50px;max-height:400px;outline:none")
+            .flex.items-center.justify-between.px-3.py-2.bg-surface-container-high
               .flex.items-center.gap-1
-                label.p-2.hover_bg-surface-container-highest.rounded.text-on-surface-variant.transition-colors.cursor-pointer
-                  span.material-symbols-outlined.text-\[20px\] attach_file
+                label.p-2.rounded.text-on-surface-variant.cursor-pointer(title="Attach File")
+                  span.material-symbols-outlined.text-xl attach_file
                   input.hidden(type="file", id="attachment-file-input")
-                span.text-caption.text-on-surface-variant(id="file-name-preview")
+                span.text-xs.text-on-surface-variant(id="file-name-preview")
               .flex.items-center.gap-2
-                button.p-2.bg-primary-container.text-on-primary-container.rounded-lg.font-bold.transition-all(type="submit", id="send-btn")
+                button.p-2.rounded-lg.font-bold.btn-primary.cursor-pointer(type="submit", id="send-btn", title="Send Message")
                   span.material-symbols-outlined send
       .text-center.mt-2
-        span.text-\[10px\].text-on-surface-variant.uppercase.tracking-tighter Enter to send • Real-time Socket Connected
+        span.text-xs.text-on-surface-variant Enter to send · Real-time Socket Connected
 
   //- Right Info Sidebar
-  aside.hidden.xl_flex.flex-col.w-\[300px\].bg-sidebar-bg.border-l.border-border-subtle.overflow-y-auto(id="info-sidebar")
-    .h-\[49px\].border-b.border-border-subtle.flex.items-center.justify-between.px-4.shrink-0
-      span.text-label-md.font-bold.text-text-primary Channel Details
+  div(class="hidden xl:flex flex-col w-72 bg-sidebar-bg border-l border-border-subtle overflow-y-auto", id="info-sidebar")
+    .h-12.border-b.border-border-subtle.flex.items-center.justify-between.px-4.shrink-0
+      span.text-sm.font-bold.text-white Channel Details
+      button.text-on-surface-variant(id="close-info-btn")
+        span.material-symbols-outlined.text-lg close
     .p-6.space-y-6
       div
-        h3.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold.mb-2 Topic / Description
-        p.text-body-md.text-on-surface #{room.description || 'No description provided.'}
+        .flex.items-center.justify-between.mb-2
+          h3.text-xs.uppercase.tracking-wider.text-on-surface-variant.font-bold Description
+          if canManage
+            button.text-on-surface-variant.rounded.p-1.cursor-pointer(id="edit-desc-btn", title="Edit Description")
+              span.material-symbols-outlined.text-base edit
+        p.text-sm.text-on-surface(id="room-desc-text") #{room.topic || 'No description provided.'}
+        form.hidden.mt-2(id="edit-desc-form")
+          textarea.w-full.rounded.p-2.text-sm.text-white.input-field.resize-none(id="edit-desc-input", rows="2") #{room.topic || ''}
+          .flex.gap-2.mt-2
+            button.px-3.py-1.rounded.text-xs.font-bold.btn-primary.cursor-pointer(type="submit") Save
+            button.px-3.py-1.rounded.text-xs.bg-surface-container-highest.text-white.cursor-pointer(type="button", id="cancel-edit-desc") Cancel
       div
-        h3.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold.mb-3 Channel Members (#{roomMembers ? roomMembers.length : 0})
-        .space-y-2
+        .flex.items-center.justify-between.mb-3
+          h3.text-xs.uppercase.tracking-wider.text-on-surface-variant.font-bold
+            | Members&nbsp;
+            span.text-primary (#[span(id="member-count") #{roomMembers ? roomMembers.length : 0}])
+          if canManage
+            button(class="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold btn-primary cursor-pointer", id="add-members-btn")
+              span.material-symbols-outlined.text-sm person_add
+              span Add Members
+        .space-y-2(id="room-member-list")
           if roomMembers && roomMembers.length
             each m in roomMembers
               if m.user
-                .flex.items-center.gap-3.p-2.rounded.bg-surface-container
+                .flex.items-center.gap-3.p-2.rounded.bg-surface-container(data-user-id=m.user._id)
                   .w-6.h-6.rounded.bg-blue-500.overflow-hidden
                     img.w-full.h-full.object-cover(src=m.user.avatar || '/img/default.jpg', alt=m.user.username)
-                  span.text-label-md.text-white #{m.user.username}
-                  span.ml-auto.text-caption.text-primary.font-bold #{m.role}
+                  span.text-sm.text-white #{m.user.username}
+                  span.ml-auto.text-xs.text-primary.font-bold #{m.role}
+                  if canManage && m.user._id.toString() !== user._id.toString()
+                    button(class="p-1 rounded text-on-surface-variant btn-remove-member cursor-pointer", title=`Remove ${m.user.username}`)
+                      span.material-symbols-outlined.text-base person_remove
+          else
+            .text-sm.text-on-surface-variant No members yet
+      div(class="pt-4 border-t border-border-subtle space-y-2")
+        if !isAdmin
+          button.w-full.flex.items-center.justify-center.gap-2.px-3.py-2.rounded-lg.border.border-border-subtle.text-sm.font-bold.text-on-surface-variant.cursor-pointer(id="leave-room-btn")
+            span.material-symbols-outlined.text-base logout
+            span Leave Channel
+        if isAdmin
+          button.w-full.flex.items-center.justify-center.gap-2.px-3.py-2.rounded-lg.border.border-error.bg-error.bg-opacity-10.text-sm.font-bold.text-error.cursor-pointer(id="delete-room-btn")
+            span.material-symbols-outlined.text-base delete
+            span Delete Channel
+
+  //- Add Members Modal
+  div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="add-members-modal")
+    .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-md.p-6.shadow-2xl
+      .flex.items-center.justify-between.mb-4
+        h3.text-lg.font-bold.text-white Add Members to ##{room.name}
+        button.text-on-surface-variant.rounded.p-1.cursor-pointer(id="close-add-members-modal")
+          span.material-symbols-outlined close
+      input.w-full.rounded.p-2.text-sm.text-white.input-field.mb-3(type="text", id="candidate-search", placeholder="Search users...")
+      .max-h-72.overflow-y-auto.space-y-2(id="candidate-list")
+        .text-sm.text-on-surface-variant Loading users...
+      .flex.justify-end.gap-3.mt-4
+        button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="cancel-add-members") Cancel
+        button.px-4.py-2.rounded.font-bold.btn-primary.cursor-pointer(type="button", id="confirm-add-members") Add Selected
