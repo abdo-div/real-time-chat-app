@@ -1,0 +1,47 @@
+extends _base
+
+block content
+  main.flex-1.flex.flex-col.bg-main-bg.overflow-y-auto.p-8
+    .max-w-2xl.mx-auto.w-full.space-y-8
+      h1.text-headline-lg.font-bold.text-white Account Settings
+
+      .bg-surface-container.border.border-border-subtle.rounded-xl.p-6.space-y-6
+        h2.text-headline-md.font-bold.text-primary Profile Information
+        div.hidden.p-3.rounded.bg-primary-container\/20.border.border-primary.text-primary.text-label-md(id="profile-success-alert")
+        
+        form(id="update-profile-form", enctype="multipart/form-data")
+          .flex.items-center.gap-6.mb-6
+            .w-20.h-20.rounded-xl.bg-blue-500.overflow-hidden
+              img.w-full.h-full.object-cover(src=user.avatar || "/img/default.jpg", alt="avatar", id="avatar-preview")
+            div
+              label.block.text-label-sm.text-on-surface-variant.mb-1 Change Avatar Photo
+              input.text-white.text-caption(type="file", name="photo", accept="image/*", id="photo-input")
+
+          .mb-4
+            label.block.text-label-md.text-white.mb-1 Username
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="text", name="username", value=user.username, required=true)
+          .mb-4
+            label.block.text-label-md.text-white.mb-1 Email
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="email", name="email", value=user.email, required=true)
+          .mb-6
+            label.block.text-label-md.text-white.mb-1 Status Bio
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="text", name="bio", value=user.bio || "", placeholder="What's your working status?")
+          
+          button.px-6.py-2.5.bg-primary-container.text-on-primary-container.font-bold.rounded-lg(type="submit") Save Profile
+
+      .bg-surface-container.border.border-border-subtle.rounded-xl.p-6.space-y-6
+        h2.text-headline-md.font-bold.text-primary Update Password
+        div.hidden.p-3.rounded.bg-primary-container\/20.border.border-primary.text-primary.text-label-md(id="password-success-alert")
+        
+        form(id="update-password-form")
+          .mb-4
+            label.block.text-label-md.text-white.mb-1 Current Password
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="currentPassword", required=true)
+          .mb-4
+            label.block.text-label-md.text-white.mb-1 New Password
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="newPassword", required=true)
+          .mb-6
+            label.block.text-label-md.text-white.mb-1 Confirm New Password
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-3.text-white(type="password", id="confirmPassword", required=true)
+          
+          button.px-6.py-2.5.bg-secondary-container.text-white.font-bold.rounded-lg(type="submit") Update Password

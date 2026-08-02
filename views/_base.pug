@@ -1,0 +1,164 @@
+doctype html
+html.dark(lang="en")
+  head
+    meta(charset="utf-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1.0")
+    title #{title || 'SlackFlow | Workspace'}
+    script(src="https://cdn.tailwindcss.com?plugins=forms,container-queries")
+    link(href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap", rel="stylesheet")
+    link(href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap", rel="stylesheet")
+    script.
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "sidebar-bg": "#1A1D21",
+              "main-bg": "#222529",
+              "surface-container": "#1d2024",
+              "surface-container-low": "#191c20",
+              "surface-container-high": "#272a2e",
+              "surface-container-highest": "#323539",
+              "border-subtle": "#35373B",
+              "primary": "#79d9b2",
+              "primary-container": "#007a5a",
+              "on-primary-container": "#a4ffd8",
+              "secondary": "#9dcaff",
+              "secondary-container": "#025f9e",
+              "presence-online": "#2BAC76",
+              "text-primary": "#FFFFFF",
+              "text-muted": "#D1D2D3",
+              "text-timestamp": "#AB9BA9",
+              "on-surface": "#e1e2e8",
+              "on-surface-variant": "#bdc9c2",
+              "error": "#ffb4ab"
+            },
+            borderRadius: {
+              DEFAULT: "0.125rem",
+              lg: "0.25rem",
+              xl: "0.5rem",
+              full: "0.75rem"
+            },
+            spacing: {
+              "sidebar-width": "260px",
+              "gutter": "12px",
+              "section-padding": "16px"
+            }
+          }
+        }
+      }
+    style.
+      body { font-family: 'Inter', sans-serif; background-color: #111417; }
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #35373B; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #4A4D51; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .presence-glow { box-shadow: 0 0 8px rgba(43, 172, 118, 0.4); }
+      .message-hover:hover .message-actions { opacity: 1; transform: translateY(0); }
+      .message-actions { opacity: 0; transform: translateY(4px); transition: all 150ms ease; }
+
+  body.flex.flex-col.h-screen.overflow-hidden.text-on-surface
+    //- Top Navigation Bar
+    header.fixed.top-0.w-full.h-\[44px\].bg-sidebar-bg.flex.items-center.justify-between.px-gutter.z-50.border-b.border-border-subtle
+      .flex.items-center.gap-4
+        a.text-headline-md.font-headline-md.text-primary.font-bold(href="/") SlackFlow
+      .flex-1.max-w-2xl.px-8.hidden.md_block
+        .relative.group
+          .absolute.inset-y-0.left-3.flex.items-center.pointer-events-none.text-on-surface-variant
+            span.material-symbols-outlined.text-\[18px\] search
+          input.w-full.bg-surface-container-low.border.border-border-subtle.rounded-lg.py-1.pl-10.pr-4.text-body-md.focus_outline-none.focus_ring-2.focus_ring-secondary-container.transition-all(type="text", placeholder="Search channels, users or messages...", id="global-search")
+      .flex.items-center.gap-3
+        if user
+          a.flex.items-center.gap-2.text-on-surface-variant.hover_bg-surface-container-highest.p-1.rounded-lg.transition-colors(href="/me", title="Account Settings")
+            .h-7.w-7.rounded.bg-secondary-container.overflow-hidden
+              img.w-full.h-full.object-cover(src=user.avatar || "/img/default.jpg", alt=user.username)
+            span.text-label-md.text-white.hidden.sm_inline #{user.username}
+          button.text-on-surface-variant.hover_text-white.p-1.rounded-lg(id="logout-btn", title="Logout")
+            span.material-symbols-outlined logout
+        else
+          a.px-3.py-1.bg-primary-container.text-on-primary-container.rounded.text-label-md.font-bold(href="/login") Log In
+          a.px-3.py-1.bg-surface-container-highest.text-white.rounded.text-label-md.font-bold(href="/signup") Sign Up
+
+    .flex.flex-1.mt-\[44px\].overflow-hidden
+      //- Sidebar Navigation
+      if user
+        aside.hidden.md_flex.flex-col.w-sidebar-width.bg-sidebar-bg.border-r.border-border-subtle.overflow-y-auto
+          //- Workspace Header
+          .p-gutter.flex.items-center.justify-between.hover_bg-surface-container-highest.cursor-pointer.transition-colors.group
+            .flex.items-center.gap-2
+              .w-9.h-9.bg-primary-container.rounded-lg.flex.items-center.justify-center.text-on-primary-container.font-bold.text-headline-md ET
+              .overflow-hidden
+                h2.text-label-md.font-label-md.text-text-primary.truncate RealTime Workspace
+                .flex.items-center.gap-1.5
+                  .w-2.5.h-2.5.bg-presence-online.rounded-full.presence-glow
+                  span.text-caption.text-on-surface-variant #{user.username} (Online)
+          
+          nav.mt-4.px-2.space-y-0.5
+            a.flex.items-center.gap-3.px-3.py-1.5.bg-secondary-container.text-white.font-bold.rounded-none.cursor-pointer(href="/")
+              span.material-symbols-outlined.text-\[20px\] forum
+              span.text-label-md Dashboard & Threads
+
+          //- Channels List
+          .mt-6
+            .px-5.py-2.flex.items-center.justify-between.group
+              span.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold Channels
+              button.material-symbols-outlined.text-on-surface-variant.text-\[18px\].hover_text-white(id="open-create-room-modal", title="Create Channel") add
+            .space-y-0.5.px-2(id="sidebar-channels-list")
+              if rooms && rooms.length
+                each r in rooms
+                  a.flex.items-center.gap-3.px-3.py-1.text-on-surface-variant.hover_bg-surface-container-low.cursor-pointer.rounded-none(href=`/room/${r.slug}`, class=(room && room.slug === r.slug ? 'text-white bg-surface-container-highest font-semibold' : ''))
+                    span.material-symbols-outlined.text-\[16px\] tag
+                    span.text-label-md #{r.name}
+              else
+                .px-3.py-1.text-caption.text-on-surface-variant No channels found
+
+          //- Direct Messages List
+          .mt-6
+            .px-5.py-2.flex.items-center.justify-between.group
+              span.text-label-sm.uppercase.tracking-wider.text-on-surface-variant.font-bold Direct Messages
+            .space-y-0.5.px-2(id="sidebar-users-list")
+              if users && users.length
+                each u in users
+                  a.flex.items-center.gap-3.px-3.py-1.text-on-surface-variant.hover_bg-surface-container-low.cursor-pointer.rounded-none(href=`/chat/user/${u._id}`, class=(recipient && recipient._id.toString() === u._id.toString() ? 'text-white bg-surface-container-highest font-semibold' : ''))
+                    .relative
+                      .w-5.h-5.rounded.bg-blue-500.overflow-hidden
+                        img.w-full.h-full.object-cover(src=u.avatar || "/img/default.jpg", alt=u.username)
+                      div(class=`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${u.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
+                    span.text-label-md #{u.username}
+              else
+                .px-3.py-1.text-caption.text-on-surface-variant No other users
+
+          .mt-auto.p-4.border-t.border-border-subtle.bg-surface-container-low
+            a.w-full.block.text-center.py-2.bg-primary-container.text-on-primary-container.rounded.text-label-md.font-bold.mb-2.hover_opacity-90.transition-opacity(href="/me") My Profile & Status
+
+      //- Main Content Body Block
+      block content
+
+    //- Create Channel Modal
+    div.hidden.fixed.inset-0.bg-black.bg-opacity-70.z-50.flex.items-center.justify-center(id="create-room-modal")
+      .bg-sidebar-bg.border.border-border-subtle.rounded-xl.w-full.max-w-md.p-6.shadow-2xl
+        .flex.items-center.justify-between.mb-4
+          h3.text-headline-md.font-bold.text-white Create a Channel
+          button.text-on-surface-variant.hover_text-white(id="close-create-room-modal")
+            span.material-symbols-outlined close
+        form(id="create-room-form")
+          .mb-4
+            label.block.text-label-sm.text-on-surface-variant.mb-1 Channel Name
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-2.text-white(type="text", name="name", placeholder="e.g. announcements", required=true)
+          .mb-4
+            label.block.text-label-sm.text-on-surface-variant.mb-1 Description
+            input.w-full.bg-surface-container-low.border.border-border-subtle.rounded.p-2.text-white(type="text", name="description", placeholder="What is this channel about?")
+          .mb-6.flex.items-center.gap-2
+            input(type="checkbox", name="isPrivate", id="isPrivate")
+            label.text-label-md.text-white(for="isPrivate") Make private channel
+          .flex.justify-end.gap-3
+            button.px-4.py-2.bg-surface-container-highest.text-white.rounded(type="button", id="cancel-create-room") Cancel
+            button.px-4.py-2.bg-primary-container.text-on-primary-container.rounded.font-bold(type="submit") Create Channel
+
+    script(src="/socket.io/socket.io.js")
+    script(src="/js/app.js")

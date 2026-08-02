@@ -1,0 +1,38 @@
+extends _base
+
+block content
+  main.flex-1.flex.flex-col.bg-main-bg.relative.min-w-0(data-recipient-id=recipient._id)
+    header.h-\[49px\].border-b.border-border-subtle.flex.items-center.justify-between.px-section-padding.shrink-0.bg-main-bg\/80.backdrop-blur-md.sticky.top-0.z-10
+      .flex.items-center.gap-3
+        .relative
+          .w-7.h-7.rounded.bg-blue-500.overflow-hidden
+            img.w-full.h-full.object-cover(src=recipient.avatar || "/img/default.jpg", alt=recipient.username)
+          div(class=`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${recipient.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
+        h1.text-headline-md.font-headline-md.text-text-primary Direct Message with #{recipient.username}
+
+    .flex-1.overflow-y-auto.px-section-padding.pt-6.space-y-6.pb-4(id="message-feed")
+      .relative.flex.items-center.py-4
+        .flex-grow.border-t.border-border-subtle
+        span.flex-shrink.mx-4.px-4.py-1.rounded-full.border.border-border-subtle.bg-surface-container.text-caption.font-bold.text-on-surface-variant Beginning of your message history with #{recipient.username}
+        .flex-grow.border-t.border-border-subtle
+
+      if messages && messages.length
+        each msg in messages
+          .flex.gap-4.group.message-hover(data-message-id=msg._id)
+            .shrink-0.w-10.h-10.rounded-lg.bg-indigo-500.overflow-hidden.mt-1
+              img.w-full.h-full.object-cover(src=(msg.sender && msg.sender.avatar) ? msg.sender.avatar : "/img/default.jpg", alt="avatar")
+            .flex-1.min-w-0
+              .flex.items-baseline.gap-2
+                span.text-label-md.text-text-primary.hover_underline.cursor-pointer #{msg.sender ? msg.sender.username : 'User'}
+                span.text-caption.text-text-timestamp #{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              .text-body-md.text-on-surface.mt-1.leading-relaxed #{msg.content}
+
+    footer.p-section-padding.shrink-0.bg-main-bg
+      form(id="chat-form")
+        .max-w-5xl.mx-auto.border.border-border-subtle.rounded-xl.bg-surface-container.overflow-hidden.shadow-2xl.focus-within_ring-2.focus-within_ring-secondary-container.transition-shadow
+          .flex.flex-col
+            textarea.w-full.bg-transparent.border-none.focus_ring-0.text-body-md.text-text-primary.p-4.resize-none.min-h-\[50px\].max-h-\[400px\].overflow-y-auto(id="message-input", placeholder=`Message ${recipient.username}`, rows="1")
+            .flex.items-center.justify-between.px-3.py-2.bg-surface-container-high\/50
+              .flex.items-center.gap-2
+                button.p-2.bg-primary-container.text-on-primary-container.rounded-lg.font-bold(type="submit", id="send-btn")
+                  span.material-symbols-outlined send

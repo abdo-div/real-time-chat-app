@@ -1,0 +1,23 @@
+extends _base
+
+block content
+  main.flex-1.flex.flex-col.items-center.justify-center.bg-main-bg.p-6
+    .w-full.max-w-md.bg-surface-container.border.border-border-subtle.p-8.rounded-2xl.shadow-2xl
+      .text-center.mb-6
+        h1.text-headline-lg.font-bold.text-primary.mb-2 Sign In to SlackFlow
+        p.text-body-md.text-on-surface-variant Enter your details to access your workspace
+
+      div.hidden.p-3.mb-4.rounded.bg-error\/20.border.border-error.text-error.text-label-md(id="auth-error-alert")
+
+      form(id="login-form")
+        .mb-4
+          label.block.text-label-md.text-white.mb-2 Email Address
+          input.w-full.bg-surface-container-low.border.border-border-subtle.rounded-lg.p-3.text-white.focus_outline-none.focus_ring-2.focus_ring-secondary-container(type="email", id="email", required=true, placeholder="name@work-email.com")
+        .mb-6
+          label.block.text-label-md.text-white.mb-2 Password
+          input.w-full.bg-surface-container-low.border.border-border-subtle.rounded-lg.p-3.text-white.focus_outline-none.focus_ring-2.focus_ring-secondary-container(type="password", id="password", required=true, placeholder="••••••••")
+        button.w-full.py-3.bg-primary-container.text-on-primary-container.font-bold.rounded-lg.hover_opacity-90.transition-opacity.mb-4(type="submit") Sign In
+
+      .text-center.text-body-md.text-on-surface-variant
+        span Don't have an account? 
+        a.text-primary.font-bold.hover_underline(href="/signup") Create account
