@@ -8,6 +8,8 @@ import cookieParser from "cookie-parser";
 import userRoutes from "./routes/userRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import viewRoutes from "./routes/viewRoutes.js";
+
 // Re-create __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +30,9 @@ app.set("views", path.join(__dirname, "views"));
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "success", message: "Server is healthy!" });
 });
+
+// 1. MOUNT PUG VIEW ROUTES
+app.use("/", viewRoutes);
 
 // 2. MOUNT REST API ROUTES
 app.use("/api/v1/users", userRoutes);
