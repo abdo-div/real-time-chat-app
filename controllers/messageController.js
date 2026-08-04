@@ -2,7 +2,7 @@ import Message from "../models/Message.js";
 import Room from "../models/Room.js";
 import RoomMember from "../models/RoomMember.js";
 import catchAsync from "../utils/catchAsync.js";
-import AppError from "../utils/appError.js";
+import AppError from "../utils/AppError.js";
 // Helper function to check if user is a member of the target room
 const checkRoomAccess = async (roomId, userId) => {
   const membership = await RoomMember.findOne({ room: roomId, user: userId });
@@ -83,7 +83,9 @@ export const createMessage = catchAsync(async (req, res, next) => {
       return next(new AppError("No room found with that ID", 404));
     }
     if (roomDoc.isPrivate) {
-      return next(new AppError("You do not have access to this private room", 403));
+      return next(
+        new AppError("You do not have access to this private room", 403),
+      );
     }
     // Auto-join public room
     membership = await RoomMember.create({
@@ -409,7 +411,9 @@ export const getUnreadCounts = catchAsync(async (req, res) => {
   const memberships = await RoomMember.find({ user: userId }).lean();
 
   if (memberships.length === 0) {
-    return res.status(200).json({ status: "success", data: { unreadCounts: [] } });
+    return res
+      .status(200)
+      .json({ status: "success", data: { unreadCounts: [] } });
   }
 
   // Count messages newer than each room's lastReadAt
@@ -427,7 +431,9 @@ export const getUnreadCounts = catchAsync(async (req, res) => {
 
   const withUnread = counted.filter((c) => c.count > 0);
   if (withUnread.length === 0) {
-    return res.status(200).json({ status: "success", data: { unreadCounts: [] } });
+    return res
+      .status(200)
+      .json({ status: "success", data: { unreadCounts: [] } });
   }
 
   // Fetch room details so the client can match badges (slug/type) and resolve DM partners
