@@ -49,7 +49,7 @@ block content
                         img.w-full.h-full.object-cover(src=u.avatar || '/img/default.jpg', alt=u.username)
                       div
                         .text-sm.text-white.font-bold #{u.username}
-                        .text-xs.text-on-surface-variant #{u.status || 'offline'}
+                        span.text-xs.text-on-surface-variant.presence-text(data-user-id=u._id, class=u.status === 'online' ? 'text-presence-online' : '') #{u.status === 'online' ? 'online' : formatLastSeen(u.lastSeen)}
                     span.text-xs.text-secondary Message →
               else
                 p.text-xs.text-on-surface-variant No other team members found.

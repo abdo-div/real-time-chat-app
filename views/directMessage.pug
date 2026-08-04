@@ -7,10 +7,13 @@ block content
         .relative
           .w-7.h-7.rounded.bg-blue-500.overflow-hidden
             img.w-full.h-full.object-cover(src=recipient.avatar || "/img/default.jpg", alt=recipient.username)
-          div(class=`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${recipient.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
+          div(id="dm-presence-dot", class=`presence-dot absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${recipient.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`, data-user-id=recipient._id)
         div
           h1.text-lg.font-bold.text-white #{recipient.username}
-          p.text-xs.text-on-surface-variant #{recipient.bio || (recipient.status === 'online' ? '🟢 Online' : '⚫ Offline')}
+          p.text-xs.text-on-surface-variant
+            span(id="dm-presence-text", data-user-id=recipient._id, class=recipient.status === 'online' ? 'text-presence-online' : '') #{recipient.status === 'online' ? '🟢 Online' : '⚫ ' + formatLastSeen(recipient.lastSeen)}
+            if recipient.bio
+              span.text-on-surface-variant  · #{recipient.bio}
 
     .flex-1.overflow-y-auto.px-section-padding.pt-6.pb-4(id="message-feed")
       div(class="max-w-[1100px] mx-auto space-y-6 min-h-full flex flex-col", id="message-feed-inner")
@@ -101,5 +104,8 @@ block content
                 span.text-xs.text-on-surface-variant(id="file-name-preview")
               button.p-2.rounded-lg.font-bold.btn-primary.cursor-pointer(type="submit", id="send-btn", title="Send Message")
                 span.material-symbols-outlined send
-      .text-center.mt-2
+      //- Typing Indicator (below the chat box)
+      div(class="max-w-[1100px] mx-auto text-center mt-2")
+        span.hidden.text-xs.text-primary.font-bold(id="typing-indicator") someone is typing...
+      .text-center.mt-1
         span.text-xs.text-on-surface-variant Enter to send · Private Message

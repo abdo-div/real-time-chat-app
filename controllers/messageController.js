@@ -1,4 +1,5 @@
 import Message from "../models/Message.js";
+import Room from "../models/Room.js";
 import RoomMember from "../models/RoomMember.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/appError.js";
@@ -157,7 +158,16 @@ export const createMessage = catchAsync(async (req, res, next) => {
   // 5. Real-time broadcast to all sockets connected to this roomId
   const io = req.app.get("io");
   if (io) {
-    io.to(roomId).emit("new_message", newMessage);
+    io.to(String(roomId)).emit("new_message", newMessage);
+
+    // Notify other room members so their unread badge can update live
+    const otherMembers = await RoomMember.find({
+      room: roomId,
+      user: { $ne: req.user.id },
+    }).select("user");
+    otherMembers.forEach((m) => {
+      io.to(String(m.user)).emit("unread_changed", { roomId: String(roomId) });
+    });
   }
 
   res.status(201).json({
@@ -363,7 +373,7 @@ export const markMessagesAsRead = catchAsync(async (req, res) => {
   const { roomId } = req.params;
   const userId = req.user._id;
 
-  // Find messages in this room NOT sent by current user and NOT already read by current user
+  // Mark unread messages in DB
   const updateMessages = await Message.updateMany(
     {
       room: roomId,
@@ -380,6 +390,9 @@ export const markMessagesAsRead = catchAsync(async (req, res) => {
     },
   );
 
+  // Sync the membership's lastReadAt so unread badge counts reset
+  await RoomMember.markAsRead(roomId, userId);
+
   res.status(200).json({
     status: "success",
     message: "message marked as read",
@@ -388,28 +401,71 @@ export const markMessagesAsRead = catchAsync(async (req, res) => {
 });
 
 // 2. Get unread message counts grouped by room for the logged-in user
-
+// Unread = messages created after the user's lastReadAt for that room
 export const getUnreadCounts = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const usreadCounts = await Message.aggregate([
-    {
-      $match: {
+
+  // Find all rooms the user is a member of
+  const memberships = await RoomMember.find({ user: userId }).lean();
+
+  if (memberships.length === 0) {
+    return res.status(200).json({ status: "success", data: { unreadCounts: [] } });
+  }
+
+  // Count messages newer than each room's lastReadAt
+  const counted = await Promise.all(
+    memberships.map(async (m) => {
+      const count = await Message.countDocuments({
+        room: m.room,
         sender: { $ne: userId },
-        "readBy.user": { $ne: userId },
-      },
-    },
-    {
-      $group: {
-        _id: "$room",
-        unreadCounts: { $sum: 1 },
-      },
-    },
-  ]);
+        isDeleted: false,
+        createdAt: { $gt: m.lastReadAt || new Date(0) },
+      });
+      return { room: m.room, count };
+    }),
+  );
+
+  const withUnread = counted.filter((c) => c.count > 0);
+  if (withUnread.length === 0) {
+    return res.status(200).json({ status: "success", data: { unreadCounts: [] } });
+  }
+
+  // Fetch room details so the client can match badges (slug/type) and resolve DM partners
+  const rooms = await Room.find({
+    _id: { $in: withUnread.map((u) => u.room) },
+  }).lean();
+  const roomById = new Map(rooms.map((r) => [r._id.toString(), r]));
+
+  const dmRoomIds = rooms
+    .filter((r) => r.type === "dm" || r.type === "direct")
+    .map((r) => r._id);
+
+  // For DM rooms, the badge should appear next to the other participant's name
+  const dmWithByRoom = new Map();
+  if (dmRoomIds.length) {
+    const dmMembers = await RoomMember.find({
+      room: { $in: dmRoomIds },
+      user: { $ne: userId },
+    }).lean();
+    dmMembers.forEach((m) => {
+      dmWithByRoom.set(m.room.toString(), m.user);
+    });
+  }
+
+  const unreadCounts = withUnread.map((u) => {
+    const room = roomById.get(u.room.toString());
+    const isDm = room && (room.type === "dm" || room.type === "direct");
+    return {
+      roomId: u.room,
+      count: u.count,
+      slug: room ? room.slug : null,
+      type: room ? room.type : null,
+      dmWith: isDm ? dmWithByRoom.get(u.room.toString()) || null : null,
+    };
+  });
 
   res.status(200).json({
     status: "success",
-    data: {
-      unreadCounts,
-    },
+    data: { unreadCounts },
   });
 });

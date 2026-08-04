@@ -62,7 +62,12 @@ html.dark(lang="en")
       .message-hover:hover .message-actions { opacity: 1; transform: translateY(0); }
       .message-actions { opacity: 0; transform: translateY(4px); transition: all 150ms ease; }
       .sidebar-item:hover { background: #272a2e; }
-      .sidebar-item.active { background: #323539; color: #fff; font-weight: 600; }
+      .sidebar-item.active {
+        background: rgba(157, 202, 255, 0.16);
+        color: #fff;
+        font-weight: 600;
+        box-shadow: inset 3px 0 0 #9dcaff;
+      }
       .btn-primary { background: #007a5a; color: #a4ffd8; font-weight: 700; }
       .btn-primary:hover { opacity: 0.9; }
       .input-field {
@@ -87,6 +92,7 @@ html.dark(lang="en")
       }
       .msg-hover-actions { opacity: 0; transform: translateY(4px); transition: all 150ms ease; }
       .message-hover:hover .msg-hover-actions { opacity: 1; transform: translateY(0); }
+      .unread-badge { background:#e01e5a; color:#fff; font-size:10px; font-weight:700; line-height:1.5; padding:0 6px; min-width:18px; text-align:center; border-radius:9999px; }
 
   body.flex.flex-col.h-screen.overflow-hidden.text-on-surface
     //- Top Navigation Bar
@@ -133,15 +139,15 @@ html.dark(lang="en")
               style="transition:background 150ms"
             )
               .flex.items-center.gap-2.min-w-0
-                .w-9.h-9.bg-primary-container.rounded-lg.flex.items-center.justify-center.text-on-primary-container.font-bold.overflow-hidden.shrink-0
+                .w-9.h-9.bg-primary-container.rounded-lg.flex.items-center.justify-center.text-on-primary-container.font-bold.overflow-hidden.shrink-0(id="ws-badge-holder")
                   if wsLogo
-                    img.w-full.h-full.object-cover(src=wsLogo, alt=wsName)
+                    img.w-full.h-full.object-cover(src=wsLogo, alt=wsName, id="ws-badge-logo")
                   else if wsBadgeStyle === 'icon'
-                    span.material-symbols-outlined workspaces
+                    span.material-symbols-outlined(id="ws-badge-icon") workspaces
                   else
-                    span #{wsInitials}
+                    span(id="ws-badge-initials") #{wsInitials}
                 .overflow-hidden.min-w-0
-                  h2.text-sm.font-bold.text-white.truncate #{wsName}
+                  h2.text-sm.font-bold.text-white.truncate(id="ws-badge-name") #{wsName}
                   div(class="flex items-center gap-1.5 mt-0.5")
                     .w-2.h-2.bg-presence-online.rounded-full.presence-glow
                     span.text-xs.text-on-surface-variant.truncate #{user.username} — Online
@@ -173,9 +179,10 @@ html.dark(lang="en")
                 each r in rooms
                   - if (r.type === 'dm' || r.type === 'direct') continue
                   - const isActive = room && room.slug === r.slug
-                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/room/${r.slug}`, class=isActive ? 'active' : 'text-on-surface-variant')
+                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/room/${r.slug}`, data-room-id=r._id, class=isActive ? 'active' : 'text-on-surface-variant')
                     span.material-symbols-outlined.text-base tag
-                    span.text-sm #{r.name}
+                    span.text-sm.truncate.flex-1.min-w-0 #{r.name}
+                    span.unread-badge.hidden.shrink-0
               else
                 .px-3.py-1.text-xs.text-on-surface-variant No channels found
 
@@ -187,12 +194,13 @@ html.dark(lang="en")
               if users && users.length
                 each u in users
                   - const isDMActive = recipient && recipient._id.toString() === u._id.toString()
-                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/chat/user/${u._id}`, class=isDMActive ? 'active' : 'text-on-surface-variant')
+                  a.flex.items-center.gap-3.px-3.py-1.cursor-pointer.sidebar-item(href=`/chat/user/${u._id}`, data-user-id=u._id, class=isDMActive ? 'active' : 'text-on-surface-variant')
                     .relative
                       .w-5.h-5.rounded.bg-blue-500.overflow-hidden
                         img.w-full.h-full.object-cover(src=u.avatar || "/img/default.jpg", alt=u.username)
-                      div(class=`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${u.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
-                    span.text-sm #{u.username}
+                      div(class=`presence-dot absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar-bg ${u.status === 'online' ? 'bg-presence-online' : 'bg-on-surface-variant'}`)
+                    span.text-sm.truncate.flex-1.min-w-0 #{u.username}
+                    span.unread-badge.hidden.shrink-0
               else
                 .px-3.py-1.text-xs.text-on-surface-variant No other users
 
@@ -298,4 +306,4 @@ html.dark(lang="en")
           button.px-3.py-2.rounded.text-xs.font-bold.btn-primary(id="copy-invite-link", type="button") Copy
 
     script(src="/socket.io/socket.io.js")
-    script(src="/js/app.js?v=2")
+    script(src="/js/app.js?v=13")

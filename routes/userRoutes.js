@@ -14,6 +14,7 @@ router.post("/logout", authController.logout);
 router.post("/forgotPassword", authController.forgotPassword);
 router.patch("/resetPassword/:token", authController.resetPassword);
 router.post("/google", authController.googleAuth);
+router.get("/google", authController.googleOAuthStart);
 
 // ------------------------------------------------------------------
 // PROTECTED USER ROUTES (Requires JWT)
@@ -32,6 +33,8 @@ router.patch(
 );
 router.patch("/updateStatus", userController.updateStatus);
 router.delete("/deleteMe", userController.deleteMe);
+// Beacon endpoint: called by navigator.sendBeacon() on page close
+router.post("/me/offline", userController.setOfflineBeacon);
 
 router.get("/", userController.getAllUsers);
 router.get("/:id", userController.getUser);

@@ -69,6 +69,12 @@ export const updateWorkspace = catchAsync(async (req, res, next) => {
 
   const updated = setWorkspace(patch);
 
+  // 📡 REAL-TIME: Push the updated workspace config to every connected client
+  const io = req.app.get("io");
+  if (io) {
+    io.emit("workspace_updated", { ...updated, logoUrl: updated.logo });
+  }
+
   res.status(200).json({
     status: "success",
     data: updated,
@@ -89,6 +95,12 @@ export const uploadLogo = catchAsync(async (req, res, next) => {
 
   const logoUrl = `/img/workspace-logo/${req.file.filename}`;
   const updated = setWorkspace({ logo: logoUrl });
+
+  // 📡 REAL-TIME: Push the new logo to every connected client
+  const io = req.app.get("io");
+  if (io) {
+    io.emit("workspace_updated", { ...updated, logoUrl });
+  }
 
   res.status(200).json({
     status: "success",

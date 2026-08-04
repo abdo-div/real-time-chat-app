@@ -10,7 +10,25 @@ import { OAuth2Client } from "google-auth-library";
 // ------------------------------------------------------------------
 // GOOGLE AUTHENTICATION CONFIG & KEYS
 // ------------------------------------------------------------------
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Lazily constructed: ESM hoists imports, so dotenv.config() in server.js
+// hasn't run yet when this module first evaluates. Build the client on
+// first use, when process.env is populated.
+let oauthClient;
+const getOAuthClient = () => {
+  if (!oauthClient) {
+    oauthClient = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+    );
+  }
+  return oauthClient;
+};
+
+// The dev machine's system clock is ~65 min behind real time, which trips
+// verifyIdToken's hardcoded 5-min iat tolerance ("Token used too early").
+// This public static is the only skew knob; keep it comfortably above the
+// drift (70 min). Revert to the default 300 once the OS clock is synced.
+OAuth2Client.CLOCK_SKEW_SECS_ = 4200;
 
 let googleKeys = [];
 let keysFetchedAt = 0;
@@ -25,39 +43,33 @@ async function getGooglePublicKey(kid) {
   return googleKeys.find((k) => k.kid === kid);
 }
 
-export const googleAuth = catchAsync(async (req, res, next) => {
-  const { idToken } = req.body;
-
-  const decoded = jwt.decode(idToken, { complete: true });
-  if (!decoded) return next(new AppError("Invalid Google token", 401));
-
-  const { header, payload } = decoded;
-
-  const key = await getGooglePublicKey(header.kid);
-  if (!key) return next(new AppError("Unknown Google signing key", 401));
-
-  const publicKey = crypto.createPublicKey({ format: "jwk", key });
-  const signature = Buffer.from(decoded.signature, "base64url");
-
-  const verifier = crypto.createVerify("RSA-SHA256");
-  verifier.update(idToken.split(".").slice(0, 2).join("."));
-  const valid = verifier.verify(publicKey, signature);
-  if (!valid) return next(new AppError("Invalid Google token signature", 401));
-
-  if (payload.aud !== process.env.GOOGLE_CLIENT_ID) {
-    return next(new AppError("Invalid Google token audience", 401));
-  }
-
+// Find an existing user by googleId OR email, or create a brand new one
+// from the verified Google profile. Shared by both the idToken flow (GSI)
+// and the OAuth authorization-code flow.
+async function findOrCreateGoogleUser(payload) {
   const { sub: googleId, email, name, picture } = payload;
 
-  // 1. Find existing user or create a new one
   let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
   if (!user) {
+    // Generate a base username from Google display name or email prefix
+    let baseUsername = name
+      ? name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "").slice(0, 18)
+      : email.split("@")[0].replace(/[^a-z0-9_]/g, "").slice(0, 18);
+
+    // Ensure minimum length
+    if (baseUsername.length < 3) baseUsername = baseUsername.padEnd(3, "0");
+
+    // Deduplicate: try base, then base_2, base_3, ...
+    let username = baseUsername;
+    let suffix = 2;
+    while (await User.exists({ username })) {
+      username = `${baseUsername}_${suffix}`;
+      suffix++;
+    }
+
     user = await User.create({
-      username: name
-        ? name.toLowerCase().replace(/\s+/g, "_")
-        : email.split("@")[0],
+      username,
       email,
       avatar: picture,
       googleId,
@@ -74,6 +86,102 @@ export const googleAuth = catchAsync(async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
   }
 
+  return user;
+}
+
+// Step 1 of the OAuth authorization-code flow: bounce the user to Google's
+// consent screen. Redirect URL is the authorized callback (GOOGLE_CALLBACK_URL).
+export const googleOAuthStart = (req, res, next) => {
+  const redirectUri =
+    process.env.GOOGLE_CALLBACK_URL ||
+    `${req.protocol}://${req.get("host")}/auth/google/callback`;
+
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    access_type: "offline",
+  });
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+};
+
+// Step 2: Google redirects here with ?code=... Exchange the code for tokens
+// using the client secret, verify the id_token, then log in / create the user
+// and land them on the dashboard.
+export const googleOAuthCallback = catchAsync(async (req, res, next) => {
+  const { code, error } = req.query;
+
+  if (error) {
+    return next(new AppError("Google sign-in was cancelled or denied.", 401));
+  }
+  if (!code) {
+    return next(new AppError("Missing Google authorization code", 400));
+  }
+
+  const redirectUri =
+    process.env.GOOGLE_CALLBACK_URL ||
+    `${req.protocol}://${req.get("host")}/auth/google/callback`;
+
+  const { tokens } = await getOAuthClient().getToken({
+    code,
+    redirect_uri: redirectUri,
+  });
+
+  if (!tokens || !tokens.id_token) {
+    return next(new AppError("Google sign-in failed: no id_token returned", 401));
+  }
+
+  const ticket = await getOAuthClient().verifyIdToken({
+    idToken: tokens.id_token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
+
+  const user = await findOrCreateGoogleUser(payload);
+
+  // Set the JWT cookie so the browser is authenticated, then redirect home
+  setAuthCookie(user, req, res);
+  res.redirect("/");
+});
+
+// Google Sign-In via Google Identity Services (GSI) popup: verifies the
+// client-issued idToken directly.
+export const googleAuth = catchAsync(async (req, res, next) => {
+  const { idToken } = req.body;
+  if (!idToken) {
+    return next(new AppError("Missing Google idToken", 400));
+  }
+
+  const decoded = jwt.decode(idToken, { complete: true });
+  if (!decoded) return next(new AppError("Invalid Google token", 401));
+
+  const { header, payload } = decoded;
+
+  // Check token expiry
+  if (payload.exp && Date.now() / 1000 > payload.exp) {
+    return next(new AppError("Google token has expired. Please sign in again.", 401));
+  }
+
+  const key = await getGooglePublicKey(header.kid);
+  if (!key) return next(new AppError("Unknown Google signing key", 401));
+
+  const publicKey = crypto.createPublicKey({ format: "jwk", key });
+  const signature = Buffer.from(decoded.signature, "base64url");
+
+  const verifier = crypto.createVerify("RSA-SHA256");
+  verifier.update(idToken.split(".").slice(0, 2).join("."));
+  const valid = verifier.verify(publicKey, signature);
+  if (!valid) return next(new AppError("Invalid Google token signature", 401));
+
+  if (payload.aud !== process.env.GOOGLE_CLIENT_ID) {
+    return next(new AppError("Invalid Google token audience", 401));
+  }
+
+  const user = await findOrCreateGoogleUser(payload);
+
   // 2. Issue JWT cookie/token
   createSendToken(user, 200, req, res);
 });
@@ -88,6 +196,21 @@ const signToken = (id) => {
 };
 
 const createSendToken = (user, statusCode, req, res) => {
+  const token = setAuthCookie(user, req, res);
+
+  // Strip password from the output payload
+  user.password = undefined;
+
+  res.status(statusCode).json({
+    status: "success",
+    token,
+    data: { user },
+  });
+};
+
+// Sets the httpOnly JWT cookie; returns the token (used by both JSON login
+// responses and the Google OAuth redirect flow).
+const setAuthCookie = (user, req, res) => {
   const token = signToken(user._id);
 
   res.cookie("jwt", token, {
@@ -99,14 +222,7 @@ const createSendToken = (user, statusCode, req, res) => {
     secure: req.secure || req.headers["x-forwarded-proto"] === "https",
   });
 
-  // Strip password from the output payload
-  user.password = undefined;
-
-  res.status(statusCode).json({
-    status: "success",
-    token,
-    data: { user },
-  });
+  return token;
 };
 
 // ------------------------------------------------------------------

@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "workspace.json",
+    "config.env",
+    "public/img/**",
+    "node_modules"
+  ]
+}

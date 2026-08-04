@@ -231,6 +231,18 @@ export const leaveRoom = catchAsync(async (req, res, next) => {
   if (!membership) {
     return next(new AppError("you are not a member of this room", 400));
   }
+
+  // Real-time: tell the remaining members someone left so their members list
+  // and chat feed update without a refresh.
+  const io = req.app.get("io");
+  if (io) {
+    io.to(String(req.params.roomId)).emit("member_left", {
+      roomId: String(req.params.roomId),
+      userId: String(req.user.id),
+      username: req.user.username,
+    });
+  }
+
   res.status(204).json({
     status: "success",
     data: null,
@@ -466,7 +478,7 @@ export const removeRoomMember = catchAsync(async (req, res, next) => {
   const removed = await RoomMember.findOneAndDelete({
     room: req.params.roomId,
     user: req.params.userId,
-  });
+  }).populate("user", "username");
 
   if (!removed) {
     return next(new AppError("Member not found in this room", 404));
@@ -484,6 +496,7 @@ export const removeRoomMember = catchAsync(async (req, res, next) => {
     io.to(req.params.roomId).emit("member_removed", {
       roomId: req.params.roomId,
       userId: req.params.userId,
+      username: removed?.user?.username || "A member",
     });
   }
 

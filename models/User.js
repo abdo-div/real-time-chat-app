@@ -32,7 +32,12 @@ const userSchema = mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "password is required"],
+      required: [
+        function () {
+          return this.authMethod !== "google";
+        },
+        "password is required",
+      ],
       minlength: [8, "password must be at least 8 characters"],
       select: false,
     },
@@ -40,10 +45,22 @@ const userSchema = mongoose.Schema(
       type: String,
       validate: {
         validator: function (el) {
+          // Only validate if password is provided (not Google OAuth users)
+          if (!this.password) return true;
           return el === this.password;
         },
         message: "passwords do not match!",
       },
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple docs with no googleId (null)
+    },
+    authMethod: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
     },
     passwordChangedAt: Date,
     passwordResetToken: String,
@@ -66,6 +83,10 @@ const userSchema = mongoose.Schema(
       default: "offline",
     },
     lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastSeen: {
       type: Date,
       default: Date.now,
     },

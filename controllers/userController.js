@@ -4,6 +4,7 @@ import sharp from "sharp";
 import User from "../models/User.js";
 import catchAsync from "../utils/catchAsync.js";
 import AppError from "../utils/AppError.js";
+import { initSocket } from "../utils/socketHandler.js";
 
 /**
  * Filter object fields to only allow specified allowed fields (Security helper)
@@ -206,4 +207,32 @@ export const deleteUser = catchAsync(async (req, res, next) => {
     status: "success",
     data: null,
   });
+});
+
+/**
+ * Beacon endpoint — called by navigator.sendBeacon() on page unload.
+ * Marks the current user offline immediately and broadcasts to all clients.
+ * Uses sendBeacon which sends cookies, so protect middleware authenticates it.
+ */
+export const setOfflineBeacon = catchAsync(async (req, res, next) => {
+  const userId = req.user._id.toString();
+
+  await User.findByIdAndUpdate(userId, {
+    status: "offline",
+    lastSeen: new Date(),
+  });
+
+  // Broadcast to all connected clients so every page updates instantly
+  const io = initSocket._io;
+  if (io) {
+    io.emit("user_status_changed", {
+      userId,
+      username: req.user.username,
+      status: "offline",
+      lastSeen: new Date(),
+    });
+  }
+
+  // sendBeacon ignores the response body; 204 is fine
+  res.status(204).end();
 });

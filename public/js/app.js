@@ -30,9 +30,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     socket.on("new_message", (msg) => {
+      console.log("RECEIVED SOCKET MSG:", msg);
       if (!msg || !msg._id) return;
       if (messageFeed.querySelector(`[data-message-id="${msg._id}"]`)) return;
       appendMessageToFeed(msg);
+      // Message arrived in the currently-open chat -> keep it marked as read
+      if (roomId && msg.room && String(msg.room) === String(roomId)) {
+        markRoomRead();
+      }
     });
 
     socket.on("reaction_updated", ({ messageId, reactions }) => {
@@ -57,13 +62,41 @@ document.addEventListener("DOMContentLoaded", () => {
       if (row) row.remove();
     });
 
-    socket.on("display_typing", ({ username }) => {
+    socket.on("member_left", ({ roomId: rid, userId, username }) => {
+      if (roomId && rid && String(rid) === String(roomId)) {
+        removeMemberFromView(userId);
+        appendSystemMessage(`${username || "A member"} left the channel`);
+      }
+    });
+
+    socket.on("member_removed", ({ roomId: rid, userId, username }) => {
+      if (roomId && rid && String(rid) === String(roomId)) {
+        if (currentUserId && String(userId) === String(currentUserId)) {
+          // You were kicked -> leave the channel view
+          window.location.href = "/";
+          return;
+        }
+        removeMemberFromView(userId);
+        appendSystemMessage(`${username || "A member"} was removed from the channel`);
+      }
+    });
+
+    socket.on("typing", ({ userId, username }) => {
+      if (userId && currentUserId && String(userId) === String(currentUserId)) return;
       const el = document.getElementById("typing-indicator");
       if (el) {
-        el.innerText = `${username} is typing...`;
+        el.innerText = `${username || "Someone"} is typing...`;
         el.classList.remove("hidden");
-        clearTimeout(el._timeout);
-        el._timeout = setTimeout(() => el.classList.add("hidden"), 3000);
+        clearTimeout(el._stopTimer);
+        el._stopTimer = setTimeout(() => el.classList.add("hidden"), 4000);
+      }
+    });
+
+    socket.on("stop_typing", () => {
+      const el = document.getElementById("typing-indicator");
+      if (el) {
+        el.classList.add("hidden");
+        clearTimeout(el._stopTimer);
       }
     });
 
@@ -72,22 +105,244 @@ document.addEventListener("DOMContentLoaded", () => {
       if (payload.roomId.toString() !== roomId.toString()) return;
       refreshMembers();
     });
+  }
 
-    socket.on("member_removed", (payload) => {
-      if (!roomId || !payload?.roomId) return;
-      if (payload.roomId.toString() !== roomId.toString()) return;
-      // If the current user was removed, send them back to the dashboard
-      if (payload.userId && payload.userId.toString() === currentUserId) {
-        window.location.href = "/";
-        return;
-      }
-      refreshMembers();
+  // ────────────────────────────────────────────────
+  // REAL-TIME PRESENCE — live online/offline dots
+  // (registered on every page, not only chat pages)
+  // ────────────────────────────────────────────────
+  if (socket) {
+    socket.on("user_status_changed", ({ userId, status, lastSeen }) => {
+      updatePresenceDot(userId, status, lastSeen);
+    });
+
+    socket.on("workspace_updated", (data) => {
+      applyWorkspaceUpdate(data);
+    });
+
+    // LIVE UNREAD BADGES — registered on EVERY page (including the overview,
+    // which has no roomId). Previously this only ran on chat pages, so the
+    // dashboard needed a manual refresh to see new unread counts.
+    socket.on("unread_changed", (payload) => {
+      // Skip pushes for the chat that is currently open (already marked read)
+      if (roomId && payload && payload.roomId && String(payload.roomId) === String(roomId)) return;
+      refreshUnreadBadges();
+    });
+
+    // Safety net: on any (re)connect, pull the current workspace config and
+    // unread counts in case broadcasts were missed while the socket was down.
+    socket.on("connect", () => {
+      fetch("/api/v1/workspace")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d && d.data) applyWorkspaceUpdate(d.data);
+        })
+        .catch(() => {});
+      refreshUnreadBadges();
+      syncPresence();
+    });
+
+    // Belt-and-suspenders: periodically reconcile unread badges so they are
+    // never stale even if a push event was dropped.
+    setInterval(refreshUnreadBadges, 30000);
+
+    // Periodically re-sync presence dots (sidebar + DM header) so a missed
+    // user_status_changed broadcast never leaves the DM header stale.
+    // 5 s is the maximum residual delay if the socket event was somehow lost.
+    setInterval(syncPresence, 5000);
+  }
+
+  // ────────────────────────────────────────────────
+  // INSTANT OFFLINE ON TAB/WINDOW CLOSE
+  // navigator.sendBeacon is guaranteed to fire even while the page is
+  // unloading — the socket is often already closing at this point.
+  // Guard: only fire when the user is actually logged in (logout button is
+  // rendered on every authenticated page in _base.pug).
+  // ────────────────────────────────────────────────
+  const isLoggedIn = !!document.getElementById("logout-btn");
+  if (isLoggedIn) {
+    window.addEventListener("beforeunload", () => {
+      // sendBeacon sends cookies automatically → protect() authenticates it
+      navigator.sendBeacon("/api/v1/users/me/offline");
     });
   }
 
   // Scroll to bottom on load
   const messageFeed = document.getElementById("message-feed");
   if (messageFeed) messageFeed.scrollTop = messageFeed.scrollHeight;
+
+  // ────────────────────────────────────────────────
+  // UNREAD MESSAGE BADGES (sidebar channels & DMs)
+  // ────────────────────────────────────────────────
+  async function markRoomRead() {
+    const target = roomId;
+    if (!target) return;
+    try {
+      await fetch(`/api/v1/messages/read/${target}`, { method: "PATCH" });
+    } catch (err) {
+      console.error("Mark room read error:", err);
+    }
+  }
+
+  async function fetchUnreadCounts() {
+    try {
+      const res = await fetch("/api/v1/messages/unread-counts");
+      const data = await res.json();
+      if (data.status === "success") return data.data.unreadCounts || [];
+    } catch (err) {
+      console.error("Unread counts fetch error:", err);
+    }
+    return [];
+  }
+
+  function renderUnreadBadges(counts) {
+    const channels = document.getElementById("sidebar-channels-list");
+    const usersList = document.getElementById("sidebar-users-list");
+
+    const byRoom = new Map();
+    const byDm = new Map();
+    (counts || []).forEach((c) => {
+      if (c.dmWith) byDm.set(String(c.dmWith), c.count);
+      else if (c.roomId) byRoom.set(String(c.roomId), c.count);
+    });
+
+    channels?.querySelectorAll("a[data-room-id]").forEach((link) => {
+      const badge = link.querySelector(".unread-badge");
+      if (!badge) return;
+      const count = byRoom.get(link.dataset.roomId);
+      if (count > 0) {
+        badge.textContent = count > 99 ? "99+" : count;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    });
+
+    usersList?.querySelectorAll("a[data-user-id]").forEach((link) => {
+      const badge = link.querySelector(".unread-badge");
+      if (!badge) return;
+      const count = byDm.get(link.dataset.userId);
+      if (count > 0) {
+        badge.textContent = count > 99 ? "99+" : count;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    });
+  }
+
+  async function refreshUnreadBadges() {
+    renderUnreadBadges(await fetchUnreadCounts());
+  }
+
+  function formatLastSeen(dateStr) {
+    if (!dateStr) return "Offline";
+    const diffMins = Math.floor((new Date() - new Date(dateStr)) / 60000);
+    if (diffMins < 1) return "Last seen just now";
+    if (diffMins < 60) return `Last seen ${diffMins}m ago`;
+    if (diffMins < 1440) return `Last seen ${Math.floor(diffMins / 60)}h ago`;
+    return `Last seen ${new Date(dateStr).toLocaleDateString()}`;
+  }
+
+  function updatePresenceDot(userId, status, lastSeen) {
+    const uid = String(userId);
+    const online = status === "online";
+    const applyDot = (dot) => {
+      if (!dot) return;
+      if (online) {
+        dot.classList.add("bg-presence-online");
+        dot.classList.remove("bg-on-surface-variant");
+      } else {
+        dot.classList.add("bg-on-surface-variant");
+        dot.classList.remove("bg-presence-online");
+      }
+    };
+
+    // Sidebar DM dots (avatar dot inside each sidebar user row)
+    document
+      .querySelectorAll(`#sidebar-users-list a[data-user-id="${uid}"] .presence-dot`)
+      .forEach(applyDot);
+
+    // DM page header dot (carries its own data-user-id)
+    const dmDot = document.getElementById("dm-presence-dot");
+    if (dmDot && String(dmDot.dataset.userId) === uid) applyDot(dmDot);
+
+    // DM page header status text
+    const dmText = document.getElementById("dm-presence-text");
+    if (dmText && String(dmText.dataset.userId) === uid) {
+      dmText.textContent = online ? "🟢 Online" : "⚫ " + formatLastSeen(lastSeen);
+      dmText.classList.toggle("text-presence-online", online);
+    }
+
+    // Overview / user-list status labels
+    document.querySelectorAll(`.presence-text[data-user-id="${uid}"]`).forEach((el) => {
+      el.textContent = online ? "online" : formatLastSeen(lastSeen);
+      el.classList.toggle("text-presence-online", online);
+    });
+  }
+
+  // Re-sync presence for everyone from the server. Called on page load and on
+  // every socket (re)connect so a missed broadcast never leaves stale dots.
+  async function syncPresence() {
+    try {
+      const res = await fetch("/api/v1/users");
+      const data = await res.json();
+      if (data.status !== "success" || !Array.isArray(data.data?.users)) return;
+      data.data.users.forEach((u) => updatePresenceDot(u._id, u.status, u.lastSeen));
+    } catch (err) {
+      console.error("Presence sync error:", err);
+    }
+  }
+
+  syncPresence();
+
+  // Live workspace updates (logo photo, name, badge style) pushed via socket
+  function applyWorkspaceUpdate(data) {
+    const logo = data.logoUrl || data.logo || null;
+    const name = data.name || null;
+    const badgeStyle = data.badgeStyle || "initials";
+
+    if (name) {
+      const nameEl = document.getElementById("ws-badge-name");
+      if (nameEl) nameEl.textContent = name;
+    }
+
+    const holder = document.getElementById("ws-badge-holder");
+    if (!holder) return;
+
+    // Rebuild the badge content so every state transition works, including
+    // "no logo was ever uploaded" -> the <img> element simply doesn't exist yet.
+    holder.innerHTML = "";
+
+    if (logo) {
+      const img = document.createElement("img");
+      img.id = "ws-badge-logo";
+      img.className = "w-full h-full object-cover";
+      img.alt = name || "workspace logo";
+      // Cache-bust so the browser fetches the fresh image immediately
+      img.src = `${logo}?t=${Date.now()}`;
+      holder.appendChild(img);
+    } else if (badgeStyle === "icon") {
+      const span = document.createElement("span");
+      span.id = "ws-badge-icon";
+      span.className = "material-symbols-outlined";
+      span.textContent = "workspaces";
+      holder.appendChild(span);
+    } else {
+      const span = document.createElement("span");
+      span.id = "ws-badge-initials";
+      span.textContent = (name || "RT")
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      holder.appendChild(span);
+    }
+  }
+
+  // Initial load: mark the open chat read, then paint badges
+  markRoomRead().then(refreshUnreadBadges);
 
   // ────────────────────────────────────────────────
   // GLOBAL SEARCH — live-filter channels & users
@@ -135,6 +390,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const sendBtn = document.getElementById("send-btn");
 
   if (messageInput && sendBtn) {
+    // Throttle how often we announce typing (max once per 2s) and auto-send
+    // "stop_typing" after the user pauses for 3s.
+    let lastTypingEmit = 0;
+    let typingStopTimer = null;
+    const emitTyping = () => {
+      if (!socket || !roomId || !messageInput.value.trim()) return;
+      const now = Date.now();
+      if (now - lastTypingEmit < 2000) return;
+      lastTypingEmit = now;
+      socket.emit("typing", { roomId });
+    };
+    const emitStopTyping = () => {
+      if (!socket || !roomId) return;
+      socket.emit("stop_typing", { roomId });
+    };
+    const resetTypingStopTimer = () => {
+      clearTimeout(typingStopTimer);
+      typingStopTimer = setTimeout(emitStopTyping, 3000);
+    };
+
     // Keep button active/clickable when form has input or attachments
     messageInput.addEventListener("input", () => {
       // Auto-expand
@@ -142,7 +417,12 @@ document.addEventListener("DOMContentLoaded", () => {
       messageInput.style.height = messageInput.scrollHeight + "px";
 
       // Typing notification
-      if (socket && roomId && messageInput.value.trim()) socket.emit("typing", { roomId });
+      if (messageInput.value.trim()) {
+        emitTyping();
+        resetTypingStopTimer();
+      } else {
+        emitStopTyping();
+      }
     });
 
     // Enter to send, Shift+Enter for new line
@@ -192,6 +472,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const content = messageInput ? messageInput.value.trim() : "";
       const hasFile = attachmentInput && attachmentInput.files.length > 0;
       if (!content && !hasFile) return;
+
+      // Stop the typing indicator for our own typing once we send
+      if (socket && roomId) {
+        socket.emit("stop_typing", { roomId });
+      }
 
       if (roomId) {
         // Channel Message sending
@@ -703,7 +988,21 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const data = await res.json();
       if (data.status !== "success") throw new Error(data.message || "Failed to save workspace settings");
-      window.location.reload();
+      // Sync the stored workspace meta (no full-page reload needed; the socket
+      // event already updated every connected client's sidebar badge live)
+      if (wsMenuBtn && data.data) {
+        const ws = data.data;
+        wsMenuBtn.dataset.name = ws.name || "";
+        wsMenuBtn.dataset.logo = ws.logo || "";
+        wsMenuBtn.dataset.badgeStyle = ws.badgeStyle || "initials";
+        wsMenuBtn.dataset.initials = (ws.name || "RT")
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
+      }
+      wsSettingsModal?.classList.add("hidden");
     } catch (err) {
       alert(err.message || "Failed to save workspace settings");
       if (saveBtn) saveBtn.disabled = false;
@@ -847,6 +1146,44 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Failed to refresh members:", err);
     }
+  }
+
+  // Live member list update when someone leaves / is removed
+  function removeMemberFromView(userId) {
+    if (!userId) return;
+    const uid = String(userId);
+    const list = document.getElementById("room-member-list");
+    const row = list?.querySelector(`[data-user-id="${uid}"]`);
+    if (row) row.remove();
+
+    const countEl = document.getElementById("member-count");
+    if (countEl) {
+      const n = parseInt(countEl.textContent || "0", 10);
+      countEl.textContent = Math.max(0, n - 1);
+    }
+    const headerCount = document.getElementById("header-member-count");
+    if (headerCount) {
+      const m = (headerCount.textContent || "").match(/^(\d+)/);
+      const n = m ? Math.max(0, parseInt(m[1], 10) - 1) : 0;
+      headerCount.textContent = `${n} members`;
+    }
+  }
+
+  // Centered system notice in the chat feed (e.g. "<user> left the channel")
+  function appendSystemMessage(text) {
+    const feed = document.getElementById("message-feed-inner") || messageFeed;
+    if (!feed) return;
+    const emptyState = feed.querySelector("#empty-messages-state");
+    if (emptyState) emptyState.remove();
+    const el = document.createElement("div");
+    el.className = "relative flex items-center py-2";
+    el.innerHTML = `
+      <div class="flex-grow border-t border-border-subtle"></div>
+      <span class="flex-shrink mx-4 px-4 py-1 rounded-full border border-border-subtle bg-surface-container text-xs font-bold text-on-surface-variant">${escapeHtml(text)}</span>
+      <div class="flex-grow border-t border-border-subtle"></div>
+    `;
+    feed.appendChild(el);
+    if (messageFeed) messageFeed.scrollTop = messageFeed.scrollHeight;
   }
 
   // ADD MEMBERS MODAL
@@ -1052,8 +1389,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ────────────────────────────────────────────────
+  // GOOGLE SIGN-IN (OAuth authorization-code flow)
+  // Button redirects to the server, which bounces to Google's consent
+  // screen and then back to /auth/google/callback.
+  // ────────────────────────────────────────────────
+  const googleBtn = document.getElementById("google-signin-btn");
+  if (googleBtn) {
+    googleBtn.addEventListener("click", () => {
+      googleBtn.disabled = true;
+      googleBtn.querySelector("span:last-child").textContent = "Redirecting…";
+      window.location.href = "/api/v1/users/google";
+    });
+  }
+
+  // ────────────────────────────────────────────────
   // SIGNUP FORM
   // ────────────────────────────────────────────────
+
   document.getElementById("signup-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const alertEl = document.getElementById("auth-error-alert");

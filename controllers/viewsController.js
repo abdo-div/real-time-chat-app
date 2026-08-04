@@ -29,7 +29,7 @@ export const fetchSidebarData = catchAsync(async (req, res, next) => {
   res.locals.users = await User.find({
     _id: { $ne: res.locals.user._id },
     active: { $ne: false },
-  }).select("username email avatar status bio");
+  }).select("username email avatar status bio lastSeen");
 
   next();
 });
@@ -87,7 +87,10 @@ export const getRoomView = catchAsync(async (req, res, next) => {
     .sort({ createdAt: 1 });
 
   // Get room members
-  const roomMembers = await RoomMember.find({ room: room._id }).populate("user", "username avatar status");
+  const roomMembers = await RoomMember.find({ room: room._id }).populate(
+    "user",
+    "username avatar status lastSeen",
+  );
 
   res.status(200).render("room", {
     title: `#${room.name} | Real-Time Chat`,
@@ -105,7 +108,9 @@ export const getRoomView = catchAsync(async (req, res, next) => {
  * Route: GET /chat/user/:userId
  */
 export const getDirectMessageView = catchAsync(async (req, res, next) => {
-  const recipient = await User.findById(req.params.userId).select("username avatar status bio");
+  const recipient = await User.findById(req.params.userId).select(
+    "username avatar status bio lastSeen",
+  );
 
   if (!recipient) {
     return res.status(404).render("error", {

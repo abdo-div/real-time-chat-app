@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Message from "../models/Message.js";
+import RoomMember from "../models/RoomMember.js";
 
 export const initSocket = (server) => {
   const io = new Server(server, {
@@ -9,7 +10,14 @@ export const initSocket = (server) => {
       origin: "*",
       methods: ["GET", "POST"],
     },
+    // Detect dead connections (PC off / network drop) within ~6 seconds.
+    // Default is pingInterval:25000 + pingTimeout:20000 = up to 45 s delay.
+    pingInterval: 3000,   // send a heartbeat every 3 s
+    pingTimeout: 3000,    // wait 3 s for pong before declaring dead
   });
+
+  // Expose io so other modules (e.g. beacon endpoint) can broadcast events.
+  initSocket._io = io;
 
   // 1. SOCKET AUTHENTICATION MIDDLEWARE
   io.use(async (socket, next) => {
@@ -47,8 +55,10 @@ export const initSocket = (server) => {
         return next(new Error("authentication error : user no longer exists"));
       }
 
-      // Attach user object to the socket session
+      // Attach user object + id to the socket session so every handler knows
+      // who owns this connection
       socket.user = currentUser;
+      socket.userId = currentUser._id;
       next();
     } catch (err) {
       console.error("Socket Auth Error:", err.message);
@@ -58,23 +68,24 @@ export const initSocket = (server) => {
 
   //2. socket connection and event handlers
 
-  io.on("connection", async (socket) => {
-    const userId = socket.user._id;
+  io.on("connection", (socket) => {
+    // Always use the string form so client-side data-user-id comparisons
+    // never fail due to Mongoose ObjectId serialisation differences.
+    const userId = socket.user._id.toString();
 
     console.log(`⚡ User connected: ${socket.user.username} (${socket.id})`);
-    // 🟢 PRESENCE: Update status in DB to online & broadcast event
 
-    await User.findByIdAndUpdate(userId, { status: "online" });
-    socket.broadcast.emit("user_status_changed", {
-      userId,
-      username: socket.user.username,
-      status: "online",
-    });
+    // IMPORTANT: register all event listeners synchronously BEFORE any async
+    // work. Otherwise events emitted by clients immediately after connect
+    // (e.g. join_room) arrive before their handler is registered and are
+    // silently dropped, so the client never joins the room / never receives
+    // live new_message broadcasts.
 
     //user joins a personal room for private notification
     socket.join(socket.user.id.toString());
 
     socket.on("join_room", (roomId) => {
+      roomId = String(roomId);
       socket.join(roomId);
       console.log(`👥 ${socket.user.username} joined room: ${roomId}`);
 
@@ -86,20 +97,24 @@ export const initSocket = (server) => {
       });
     });
     socket.on("leave_room", (roomId) => {
-      socket.leave(roomId);
+      socket.leave(String(roomId));
       console.log(`🚪 ${socket.user.username} left room: ${roomId}`);
     });
-    socket.on("typing_start", (roomId) => {
-      socket.to(roomId).emit("display_typing", {
+    // ⌨️ TYPING INDICATORS
+    // Client emits "typing" on input and "stop_typing" after a pause/send;
+    // server relays to everyone else in the room (never back to the sender).
+    socket.on("typing", ({ roomId }) => {
+      socket.to(String(roomId)).emit("typing", {
         userId: socket.user.id,
         username: socket.user.username,
         roomId,
       });
     });
 
-    socket.on("typing_stop", (roomId) => {
-      socket.to(roomId).emit("hide_typing", {
+    socket.on("stop_typing", ({ roomId }) => {
+      socket.to(String(roomId)).emit("stop_typing", {
         userId: socket.user.id,
+        username: socket.user.username,
         roomId,
       });
     });
@@ -128,6 +143,9 @@ export const initSocket = (server) => {
             },
           },
         );
+
+        // Sync lastReadAt so unread badge counts reset
+        await RoomMember.markAsRead(roomId, userId);
 
         // Broadcast to other room members
         socket.to(roomId).emit("messages_read", {
@@ -223,7 +241,16 @@ export const initSocket = (server) => {
         ]);
 
         // Broadcast to everyone in the room
-        io.to(room).emit("new_message", newMessage);
+        io.to(String(room)).emit("new_message", newMessage);
+
+        // Notify other room members so their unread badge can update live
+        const otherMembers = await RoomMember.find({
+          room,
+          user: { $ne: userId },
+        }).select("user");
+        otherMembers.forEach((m) => {
+          io.to(String(m.user)).emit("unread_changed", { roomId: String(room) });
+        });
       } catch (err) {
         console.error("Error in send_message socket event:", err);
       }
@@ -233,17 +260,38 @@ export const initSocket = (server) => {
       console.log(`❌ User disconnected: ${socket.user.username}`);
       // 🔴 PRESENCE: Update status in DB to offline & broadcast event
 
+      // Check if this user still has other active sockets before marking offline
+      const remainingSockets = await io.in(userId).allSockets();
+      if (remainingSockets.size > 0) {
+        // User still connected on another tab/window – do not mark offline
+        return;
+      }
+
       await User.findByIdAndUpdate(userId, {
         status: "offline",
         lastSeen: new Date(),
       });
       io.emit("user_status_changed", {
-        userId,
+        userId,           // already a string
         username: socket.user.username,
         status: "offline",
         lastSeen: new Date(),
       });
     });
+
+    // 🟢 PRESENCE: Update status in DB to online & broadcast event (non-blocking)
+    (async () => {
+      try {
+        await User.findByIdAndUpdate(userId, { status: "online" });
+        socket.broadcast.emit("user_status_changed", {
+          userId,           // already a string
+          username: socket.user.username,
+          status: "online",
+        });
+      } catch (err) {
+        console.error("Error updating presence on connect:", err.message);
+      }
+    })();
   });
   return io;
 };
